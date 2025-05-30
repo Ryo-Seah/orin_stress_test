@@ -4,3 +4,4 @@ transformers
 sounddevice
 librosa
 pyaudio
+protobuf

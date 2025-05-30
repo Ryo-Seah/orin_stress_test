@@ -8,10 +8,10 @@ import librosa
 SAMPLING_RATE = 16000
 DURATION = 2  # seconds
 LABELS = ['angry', 'calm', 'disgust', 'fear', 'happy', 'neutral', 'sad', 'surprise']
-
+model_name = "superb/wav2vec2-base-superb-er"
 # Load model & processor
-model = Wav2Vec2ForSequenceClassification.from_pretrained("ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition")
-processor = Wav2Vec2Processor.from_pretrained("ehcalabres/wav2vec2-lg-xlsr-en-speech-emotion-recognition")
+model = Wav2Vec2ForSequenceClassification.from_pretrained(model_name)
+processor = Wav2Vec2Processor.from_pretrained("superb/wav2vec2-base-superb-er")
 model.eval()
 
 def record_audio(duration, rate):
@@ -26,6 +26,8 @@ def predict_emotion(audio):
         logits = model(**inputs).logits
     pred_id = int(torch.argmax(logits, dim=-1))
     score = torch.softmax(logits, dim=-1).squeeze()
+    # stress_score = sum(STRESS_WEIGHTS[LABELS[i]] * probs[i] for i in range(len(LABELS)))
+    # return stress_score
     return LABELS[pred_id], score[pred_id].item()
 
 # Main loop
