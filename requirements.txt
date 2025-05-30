@@ -5,3 +5,5 @@ sounddevice
 librosa
 pyaudio
 protobuf
+audeer
+audonnx
