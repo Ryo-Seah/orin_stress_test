@@ -28,11 +28,11 @@ STRESS_WEIGHTS = {
 
 def record_audio(duration, rate):
     print("🎙️  Listening...")
-    print(sd.query_devices())
-    devices = sd.query_devices()
-    for idx, device in enumerate(devices):
-        if device['max_input_channels'] > 0:
-            print(f"[{idx}] {device['name']}")
+    # print(sd.query_devices())
+    # devices = sd.query_devices()
+    # for idx, device in enumerate(devices):
+    #     if device['max_input_channels'] > 0:
+    #         print(f"[{idx}] {device['name']}")
             
     audio = sd.rec(int(duration * rate), samplerate=rate, channels=1, dtype='float32')
     print("Amplitude:", np.abs(audio).mean())
@@ -43,15 +43,16 @@ def predict_emotion(audio):
     inputs = processor(audio, sampling_rate=SAMPLING_RATE, return_tensors="pt", padding=True)
     with torch.no_grad():
         logits = model(**inputs).logits
+    probs = torch.softmax(logits, dim=-1).squeeze()
+    stress_score = sum(STRESS_WEIGHTS[LABELS[i]] * probs[i].item() for i in range(len(LABELS)))
+    
     pred_id = int(torch.argmax(logits, dim=-1))
-    score = torch.softmax(logits, dim=-1).squeeze()
-    # stress_score = sum(STRESS_WEIGHTS[LABELS[i]] * probs[i] for i in range(len(LABELS)))
-    # return stress_score
-    return LABELS[pred_id], score[pred_id].item()
+    return LABELS[pred_id], probs[pred_id].item(), stress_score
 
 # Main loop
 if __name__ == "__main__":
     while True:
         audio = record_audio(DURATION, SAMPLING_RATE)
-        label, confidence = predict_emotion(audio)
-        print(f"🧠 Emotion: {label} ({confidence*100:.1f}%)")
+        label, confidence, stress = predict_emotion(audio)
+        print(f"🧠 Emotion: {label} ({confidence*100:.1f}%) | 🔻 Stress Score: {stress:.2f}")
+
