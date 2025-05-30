@@ -3,3 +3,4 @@ torchaudio
 transformers
 sounddevice
 librosa
+pyaudio
