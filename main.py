@@ -29,10 +29,10 @@ STRESS_WEIGHTS = {
 def record_audio(duration, rate):
     print("🎙️  Listening...")
     # print(sd.query_devices())
-    # devices = sd.query_devices()
-    # for idx, device in enumerate(devices):
-    #     if device['max_input_channels'] > 0:
-    #         print(f"[{idx}] {device['name']}")
+    devices = sd.query_devices()
+    for idx, device in enumerate(devices):
+        if device['max_input_channels'] > 0:
+            print(f"[{idx}] {device['name']}")
             
     audio = sd.rec(int(duration * rate), samplerate=rate, channels=1, dtype='float32')
     print("Amplitude:", np.abs(audio).mean())
