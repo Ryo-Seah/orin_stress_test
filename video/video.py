@@ -22,7 +22,13 @@ def estimate_stress(landmarks):
     return np.clip(score, 0, 5)
 
 # Init video stream (default camera)
-cap = cv2.VideoCapture(0)
+gst_str = (
+    "nvarguscamerasrc sensor-id=0 ! "
+    "video/x-raw(memory:NVMM), width=1280, height=720, framerate=30/1 ! "
+    "nvvidconv flip-method=0 ! video/x-raw, format=BGRx ! "
+    "videoconvert ! video/x-raw, format=BGR ! appsink"
+)
+cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
 if not cap.isOpened():
     print("Camera not accessible")
     exit()
