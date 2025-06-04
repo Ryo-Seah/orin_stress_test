@@ -3,6 +3,8 @@ import mediapipe as mp
 import numpy as np
 import time
 
+print(cv2.getBuildInformation())
+
 # initialize person detector: lightweight option
 hog = cv2.HOGDescriptor()
 hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
@@ -22,12 +24,20 @@ def estimate_stress(landmarks):
     return np.clip(score, 0, 5)
 
 # Init video stream (default camera)
+# gst_str = (
+#     "nvarguscamerasrc sensor-id=0 ! "
+#     "video/x-raw(memory:NVMM), width=1280, height=720, framerate=30/1 ! "
+#     "nvvidconv flip-method=0 ! video/x-raw, format=BGRx ! "
+#     "videoconvert ! video/x-raw, format=BGR ! appsink"
+# )
+
 gst_str = (
     "nvarguscamerasrc sensor-id=0 ! "
-    "video/x-raw(memory:NVMM), width=1280, height=720, framerate=30/1 ! "
-    "nvvidconv flip-method=0 ! video/x-raw, format=BGRx ! "
-    "videoconvert ! video/x-raw, format=BGR ! appsink"
+    "nvvidconv ! "
+    "videoconvert ! "
+    "video/x-raw, format=BGR ! appsink"
 )
+cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
 cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
 if not cap.isOpened():
     print("Camera not accessible")
