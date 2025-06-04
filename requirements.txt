@@ -7,3 +7,7 @@ pyaudio
 protobuf
 audeer
 audonnx
+python3-opencv
+mediapipe
+onnxruntime
+numpy
