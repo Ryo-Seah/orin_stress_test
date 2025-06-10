@@ -38,7 +38,7 @@ gst_str = (
     "video/x-raw, format=BGR ! appsink"
 )
 cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
-cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
+
 if not cap.isOpened():
     print("Camera not accessible")
     exit()
