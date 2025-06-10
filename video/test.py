@@ -32,7 +32,7 @@ if not cap.isOpened():
     print("❌ Failed to open camera via GStreamer.")
     exit()
 
-print("✅ Press 'q' to quit.")
+# print("✅ Press 'q' to quit.")
 
 while True:
     ret, frame = cap.read()
