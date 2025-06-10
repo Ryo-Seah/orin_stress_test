@@ -3,7 +3,7 @@ import mediapipe as mp
 import numpy as np
 import time
 
-print(cv2.getBuildInformation())
+# print(cv2.getBuildInformation())
 
 # initialize person detector: lightweight option
 hog = cv2.HOGDescriptor()
