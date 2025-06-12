@@ -10,3 +10,4 @@ audonnx
 mediapipe
 onnxruntime
 numpy
+tensorflow
