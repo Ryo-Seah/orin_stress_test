@@ -8,13 +8,18 @@ import audonnx
 SAMPLING_RATE = 16000
 DURATION = 3  # seconds
 
-model_url = "https://zenodo.org/record/6221127/files/w2v2-L-robust-12.6bc4a7fd-1.1.0.zip"
-cache_dir = "cache/"
+# Paths
+archive_path = "cache/w2v2-L-robust-12.6bc4a7fd-1.1.0.zip"
 model_dir = "model/"
-zip_name = "w2v2-L-robust-12.6bc4a7fd-1.1.0.zip"
 
-os.makedirs(cache_dir, exist_ok=True)
-archive_path = os.path.join(cache_dir, zip_name)
+# Create model dir if it doesn't exist
+os.makedirs(model_dir, exist_ok=True)
+
+# Extract from local ZIP
+extracted_path = audeer.extract_archive(archive_path, model_dir)
+
+# Load ONNX model from extracted path
+onnx_model = audonnx.load(extracted_path)s.path.join(cache_dir, zip_name)
 
 # Only download if file doesn't already exist
 if not os.path.exists(archive_path):
