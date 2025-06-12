@@ -19,14 +19,6 @@ os.makedirs(model_dir, exist_ok=True)
 extracted_path = audeer.extract_archive(archive_path, model_dir)
 
 # Load ONNX model from extracted path
-onnx_model = audonnx.load(extracted_path)s.path.join(cache_dir, zip_name)
-
-# Only download if file doesn't already exist
-if not os.path.exists(archive_path):
-    archive_path = audeer.download_url(model_url, cache_dir)
-
-# Extract the archive
-extracted_path = audeer.extract_archive(archive_path, model_dir)
 onnx_model = audonnx.load(extracted_path)
 
 # Function to record audio
