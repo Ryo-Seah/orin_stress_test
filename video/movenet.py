@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import tensorflow as tf  # Use tflite_runtime if full TensorFlow is too heavy
 import time
+import os
 
 # Load MoveNet TFLite model
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -46,7 +47,7 @@ def compute_stress_score(keypoints):
     score = 2.0 * slouch + 3.0 * head_tilt
     return float(np.clip(score, 0, 5))
 
-# Run loop
+
 cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
 if not cap.isOpened():
     print("❌ Failed to open camera.")
