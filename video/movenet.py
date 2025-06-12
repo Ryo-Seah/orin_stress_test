@@ -4,7 +4,7 @@ import tensorflow as tf  # Use tflite_runtime if full TensorFlow is too heavy
 import time
 
 # Load MoveNet TFLite model
-interpreter = tf.lite.Interpreter(model_path="movenet_thunder.tflite")  # or "movenet_lightning.tflite"
+interpreter = tf.lite.Interpreter(model_path="../movenet_thunder.tflite")  # or "movenet_lightning.tflite"
 interpreter.allocate_tensors()
 
 input_details = interpreter.get_input_details()
