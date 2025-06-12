@@ -8,13 +8,14 @@ import audonnx
 SAMPLING_RATE = 16000
 DURATION = 3  # seconds
 
-# Download and load ONNX model (arousal, dominance, valence output)
+# Ensure model is downloaded and extracted
 model_url = "https://zenodo.org/record/6221127/files/w2v2-L-robust-12.6bc4a7fd-1.1.0.zip"
 cache_dir = "cache/"
 model_dir = "model/"
+zip_filename = "w2v2-L-robust-12.6bc4a7fd-1.1.0.zip"
 
 # Ensure model is downloaded and extracted
-archive_path = audeer.download_url(model_url, cache_dir)
+archive_path = audeer.download_url(model_url, cache_dir, filename=zip_filename)
 extracted_path = audeer.extract_archive(archive_path, model_dir)
 onnx_model = audonnx.load(extracted_path)
 
