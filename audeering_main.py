@@ -34,11 +34,19 @@ def record_audio(duration, rate):
     print("Amplitude:", np.abs(audio).mean())
     return audio
 
-# Predict stress from audio using arousal
 def predict_stress(audio):
     output = onnx_model(audio, sampling_rate=SAMPLING_RATE)
-    arousal, dominance, valence = output["logits"]
-    return float(arousal), float(dominance), float(valence)
+    print("Raw logits:", output["logits"])
+    logits = output["logits"]
+    
+    # Try squeezing if it's nested
+    if isinstance(logits, (list, np.ndarray)):
+        logits = np.squeeze(logits)
+        if len(logits) == 3:
+            arousal, dominance, valence = logits
+            return float(arousal), float(dominance), float(valence)
+    
+    raise ValueError(f"Unexpected logits shape: {logits}")
 
 # Main loop
 if __name__ == "__main__":
