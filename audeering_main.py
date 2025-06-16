@@ -15,11 +15,11 @@ model_dir = "model/"
 # Create model dir if it doesn't exist
 os.makedirs(model_dir, exist_ok=True)
 
-# Extract from local ZIP
-extracted_path = audeer.extract_archive(archive_path, model_dir)
+# # Extract from local ZIP
+# extracted_path = audeer.extract_archive(archive_path, model_dir)
 
 # Load ONNX model from extracted path
-onnx_model = audonnx.load(extracted_path)
+onnx_model = audonnx.load(model_dir)
 
 # Function to record audio
 def record_audio(duration, rate):
