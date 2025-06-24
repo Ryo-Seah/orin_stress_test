@@ -4,12 +4,12 @@ import sounddevice as sd
 import audeer
 import audonnx
 
-# Constants
+# Constants (rate is in hertz. so is 16000 )
 SAMPLING_RATE = 16000
 DURATION = 3  # seconds
 
 # Paths
-archive_path = "cache/w2v2-L-robust-12.6bc4a7fd-1.1.0.zip"
+# archive_path = "cache/w2v2-L-robust-12.6bc4a7fd-1.1.0.zip"
 model_dir = "model/"
 
 # Create model dir if it doesn't exist
@@ -18,7 +18,7 @@ os.makedirs(model_dir, exist_ok=True)
 # # Extract from local ZIP
 # extracted_path = audeer.extract_archive(archive_path, model_dir)
 
-# Load ONNX model from extracted path
+# Load ONNX model from extracted path ( Assume i already saved the model into /model directory on jeton orin)
 onnx_model = audonnx.load(model_dir)
 
 # Function to record audio
