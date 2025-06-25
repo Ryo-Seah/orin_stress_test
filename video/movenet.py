@@ -30,6 +30,7 @@ def detect_pose_movenet(frame):
     interpreter.set_tensor(input_details[0]['index'], input_data)
     interpreter.invoke()
     keypoints = interpreter.get_tensor(output_details[0]['index'])[0][0]  # shape: (17, 3)
+    print("Keypoints:", keypoints)
     return keypoints
 
 # Stress scoring logic
