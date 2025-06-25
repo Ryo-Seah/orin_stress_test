@@ -10,17 +10,17 @@ model_name = "movenet_lightning_int8"  # Change to e.g. "movenet_thunder_f16" if
 input_size = 192 if "lightning" in model_name else 256
 model_path = "place.tflite"
 
-if not os.path.exists(model_path):
-    if "lightning_f16" in model_name:
-        os.system("wget -q -O model.tflite https://tfhub.dev/google/lite-model/movenet/singlepose/lightning/tflite/float16/4?lite-format=tflite")
-    elif "thunder_f16" in model_name:
-        os.system("wget -q -O model.tflite https://tfhub.dev/google/lite-model/movenet/singlepose/thunder/tflite/float16/4?lite-format=tflite")
-    elif "lightning_int8" in model_name:
-        os.system("wget -q -O model.tflite https://tfhub.dev/google/lite-model/movenet/singlepose/lightning/tflite/int8/4?lite-format=tflite")
-    elif "thunder_int8" in model_name:
-        os.system("wget -q -O model.tflite https://tfhub.dev/google/lite-model/movenet/singlepose/thunder/tflite/int8/4?lite-format=tflite")
-    else:
-        raise ValueError("Unsupported model name.")
+
+if "lightning_f16" in model_name:
+    os.system("wget -q -O model.tflite https://tfhub.dev/google/lite-model/movenet/singlepose/lightning/tflite/float16/4?lite-format=tflite")
+elif "thunder_f16" in model_name:
+    os.system("wget -q -O model.tflite https://tfhub.dev/google/lite-model/movenet/singlepose/thunder/tflite/float16/4?lite-format=tflite")
+elif "lightning_int8" in model_name:
+    os.system("wget -q -O model.tflite https://tfhub.dev/google/lite-model/movenet/singlepose/lightning/tflite/int8/4?lite-format=tflite")
+elif "thunder_int8" in model_name:
+    os.system("wget -q -O model.tflite https://tfhub.dev/google/lite-model/movenet/singlepose/thunder/tflite/int8/4?lite-format=tflite")
+else:
+    raise ValueError("Unsupported model name.")
 
 # Initialize interpreter
 interpreter = tf.lite.Interpreter(model_path=model_path)
