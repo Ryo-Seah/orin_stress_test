@@ -26,7 +26,9 @@ gst_str = (
 # Pose estimation from image
 def detect_pose_movenet(frame):
     img = cv2.resize(frame, (input_size, input_size))
-    input_data = np.expand_dims(img, axis=0).astype(np.uint8)
+
+    img = img.astype(np.float32) / 255.0  # Normalize
+    input_data = np.expand_dims(img, axis=0)  # shape: (1, 256, 256, 3)
     interpreter.set_tensor(input_details[0]['index'], input_data)
     interpreter.invoke()
     keypoints = interpreter.get_tensor(output_details[0]['index'])[0][0]  # shape: (17, 3)
