@@ -48,7 +48,7 @@ def compute_stress_score(keypoints):
     return float(np.clip(score, 0, 5))
 
 
-cap = cv2.VideoCapture(gst_str, cv2.CAP_GSTREAMER)
+cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     print("❌ Failed to open camera.")
     exit()
