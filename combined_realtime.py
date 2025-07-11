@@ -454,9 +454,12 @@ class MultiModalStressDetector:
                 if frame_count % 30 == 0:
                     fps = 30 / (time.time() - fps_start_time)
                     fps_start_time = time.time()
-                    print(f"FPS: {fps:.1f} | Video: {stress_scores['video_stress']:.3f if stress_scores['video_stress'] else 'N/A'} | "
-                          f"Audio: {stress_scores['audio_stress']:.3f if stress_scores['audio_stress'] else 'N/A'} | "
-                          f"Combined: {stress_scores['combined_stress']:.3f if stress_scores['combined_stress'] else 'N/A'}")
+                    print("FPS: {:.1f} | Video: {} | Audio: {} | Combined: {}".format(
+                    fps,
+                    f"{stress_scores['video_stress']:.3f}" if stress_scores['video_stress'] is not None else 'N/A',
+                    f"{stress_scores['audio_stress']:.3f}" if stress_scores['audio_stress'] is not None else 'N/A',
+                    f"{stress_scores['combined_stress']:.3f}" if stress_scores['combined_stress'] is not None else 'N/A'
+))
                 
                 cv2.imshow("Multi-Modal Stress Detection", annotated_frame)
                 
