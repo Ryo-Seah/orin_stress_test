@@ -51,62 +51,32 @@ class AudioVADDetector:
             devices = sd.query_devices()
             default_input = sd.default.device[0] if hasattr(sd.default, 'device') else None
             
-            print("🎤 Available Audio Devices:")
-            for i, device in enumerate(devices):
-                device_type = []
-                if device['max_input_channels'] > 0:
-                    device_type.append("INPUT")
-                if device['max_output_channels'] > 0:
-                    device_type.append("OUTPUT")
-                
-                # marker = "👉" if i == default_input else "  "
-                # print(f"{marker} {i}: {device['name']} ({', '.join(device_type)})")
-                # print(f"     Channels: In={device['max_input_channels']}, Out={device['max_output_channels']}")
-                # print(f"     Sample Rate: {device['default_samplerate']}")
-            
-            # print(f"\n🎤 Default input device: {default_input}")
-            
+            # Determine which device to use
             if self.device_id is None:
-                # print(f"🎤 Using default device ({default_input})")
                 device_to_use = None  # Use default
+                # Get default device sample rate
+                if default_input is not None and default_input < len(devices):
+                    device_samplerate = int(devices[default_input]['default_samplerate'])
+                else:
+                    device_samplerate = 44100  # Common fallback
             else:
-                print(f"🎤 Attempting to use device {self.device_id} instead of default device {default_input}")
-                
                 # Check if the requested device is valid
                 if self.device_id >= len(devices):
                     print(f"❌ Device {self.device_id} does not exist! Using default device instead.")
-                    device_to_use = None  # Use default
+                    device_to_use = None
+                    device_samplerate = int(devices[default_input]['default_samplerate']) if default_input is not None else 44100
                 elif devices[self.device_id]['max_input_channels'] == 0:
                     print(f"❌ Device {self.device_id} has no input channels! Using default device instead.")
-                    device_to_use = None  # Use default
+                    device_to_use = None
+                    device_samplerate = int(devices[default_input]['default_samplerate']) if default_input is not None else 44100
                 else:
-                    print(f"✅ Device {self.device_id} is valid: {devices[self.device_id]['name']}")
                     device_to_use = self.device_id
+                    device_samplerate = int(devices[self.device_id]['default_samplerate'])
             
-            # Check supported sample rate for the device
-            if device_to_use is not None:
-                device_info = devices[device_to_use]
-                supported_samplerate = device_info['default_samplerate']
-                print(f"🎤 Device {device_to_use} default sample rate: {supported_samplerate}Hz")
-                
-                # Use device's default sample rate if our rate is not supported
-                try:
-                    # Test if our sample rate is supported
-                    sd.check_input_settings(device=device_to_use, samplerate=self.sampling_rate)
-                    actual_samplerate = self.sampling_rate
-                    print(f"✅ Using requested sample rate: {actual_samplerate}Hz")
-                except Exception as e:
-                    print(f"⚠️  Requested sample rate {self.sampling_rate}Hz not supported: {e}")
-                    actual_samplerate = int(supported_samplerate)
-                    print(f"🔄 Using device default sample rate: {actual_samplerate}Hz")
-            else:
-                actual_samplerate = self.sampling_rate
-                print(f"🎤 Using default device with sample rate: {actual_samplerate}Hz")
-            
-            print(f"🎤 Recording {self.duration}s audio at {actual_samplerate}Hz...")
+            print(f"🎤 Recording {self.duration}s audio...")
             audio = sd.rec(
-                int(self.duration * actual_samplerate), 
-                samplerate=actual_samplerate, 
+                int(self.duration * device_samplerate), 
+                samplerate=device_samplerate, 
                 channels=1, 
                 dtype='float32',
                 device=device_to_use
@@ -114,39 +84,23 @@ class AudioVADDetector:
             sd.wait()
             audio_squeezed = np.squeeze(audio).astype(np.float32)  # Ensure float32 type
             
-            # Verify which device was actually used
-            current_device = sd.default.device[0] if device_to_use is None else device_to_use
-            # print(f"🎤 Actually used device: {current_device} ({devices[current_device]['name']})")
-            # print(f"🎤 Original audio data type: {audio_squeezed.dtype}")
-            
-            # Resample audio to model's expected sample rate if needed
-            if actual_samplerate != self.sampling_rate:
-                print(f"🔄 Resampling audio from {actual_samplerate}Hz to {self.sampling_rate}Hz for model...")
+            # Always resample audio to model's expected sample rate (since we're using device's native rate)
+            if device_samplerate != self.sampling_rate:
                 try:
                     # Simple resampling using numpy (basic linear interpolation)
                     old_length = len(audio_squeezed)
-                    new_length = int(old_length * self.sampling_rate / actual_samplerate)
+                    new_length = int(old_length * self.sampling_rate / device_samplerate)
                     audio_squeezed = np.interp(
                         np.linspace(0, old_length - 1, new_length),
                         np.arange(old_length),
                         audio_squeezed
                     ).astype(np.float32)  # Ensure float32 type for ONNX model
-                    print(f"✅ Resampled from {old_length} to {len(audio_squeezed)} samples")
-                    print(f"✅ Audio data type after resampling: {audio_squeezed.dtype}")
                 except Exception as resample_error:
                     print(f"⚠️  Resampling failed: {resample_error}")
-                    print("Using original audio without resampling")
-            
-            # Enhanced debugging
-            print(f"🎤 Recorded audio shape: {audio_squeezed.shape}")
-            print(f"🎤 Audio range: [{audio_squeezed.min():.6f}, {audio_squeezed.max():.6f}]")
-            print(f"🎤 Audio std: {audio_squeezed.std():.6f}")
-            print(f"🎤 Non-zero values: {np.count_nonzero(audio_squeezed)}/{len(audio_squeezed)}")
             
             # Check if audio is all zeros
             if np.all(audio_squeezed == 0):
                 print("⚠️  WARNING: Audio is all zeros! Check microphone permissions and hardware.")
-                print(f"   Device {current_device} may not be working properly.")
             
             return audio_squeezed
         except Exception as e:
@@ -170,30 +124,14 @@ class AudioVADDetector:
             # Calculate audio amplitude (RMS)
             amplitude = np.sqrt(np.mean(audio ** 2))
             
-            # Additional amplitude metrics for debugging
-            peak_amplitude = np.max(np.abs(audio))
-            mean_amplitude = np.mean(np.abs(audio))
-            
-            print(f"📊 Audio Analysis:")
-            print(f"   RMS Amplitude: {amplitude:.6f}")
-            print(f"   Peak Amplitude: {peak_amplitude:.6f}")
-            print(f"   Mean Absolute: {mean_amplitude:.6f}")
-            
             # If amplitude is very low, suggest checking microphone
             if amplitude < 1e-6:
-                print("⚠️  Very low amplitude detected. Check:")
-                print("   - Microphone permissions in System Preferences")
-                print("   - Microphone hardware connection")
-                print("   - Audio input levels")
+                print("⚠️  Very low amplitude detected. Check microphone setup.")
             
             output = self.audio_model(audio, sampling_rate=self.sampling_rate)
             
-            # Debug: Print raw output
-            print(f"🔍 Audio model output keys: {list(output.keys())}")
             if "logits" in output:
-                print(f"🔍 Audio model logits shape: {output['logits'].shape}")
                 logits = np.squeeze(output["logits"])
-                print(f"🔍 Squeezed logits: {logits}")
                 
                 if len(logits) == 3:
                     arousal, dominance, valence = logits
@@ -219,8 +157,6 @@ class AudioVADDetector:
             
         except Exception as e:
             print(f"Audio prediction error: {e}")
-            import traceback
-            traceback.print_exc()
             
         return None
     
