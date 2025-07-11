@@ -43,8 +43,8 @@ class MultiModalDetector:
             confidence_threshold=confidence_threshold
         )
         
-        # Initialize audio detector
-        self.audio_detector = AudioVADDetector(audio_model_path)
+        # Initialize audio detector with device 1
+        self.audio_detector = AudioVADDetector(audio_model_path, device_id=1)
         self.audio_processor = AudioVADProcessor(self.audio_detector)
         
         self.confidence_threshold = confidence_threshold

@@ -16,7 +16,7 @@ import time
 class AudioVADDetector:
     """Audio-based VAD detection using emotion recognition."""
     
-    def __init__(self, model_path: str, sampling_rate: int = 16000, duration: float = 3.0):
+    def __init__(self, model_path: str, sampling_rate: int = 16000, duration: float = 3.0, device_id: int = 1):
         """
         Initialize audio VAD detector.
         
@@ -24,9 +24,11 @@ class AudioVADDetector:
             model_path: Path to audio emotion model
             sampling_rate: Audio sampling rate
             duration: Audio recording duration in seconds
+            device_id: Audio input device ID (default: 1)
         """
         self.sampling_rate = sampling_rate
         self.duration = duration
+        self.device_id = device_id
         self.vad_buffer = deque(maxlen=30)  # Keep last 30 VAD scores
         
         # Load audio model
@@ -63,12 +65,14 @@ class AudioVADDetector:
                 print(f"     Sample Rate: {device['default_samplerate']}")
             
             print(f"\n🎤 Default input device: {default_input}")
+            print(f"🎤 Using device {self.device_id} instead of default device {default_input}")
             print(f"🎤 Recording {self.duration}s audio at {self.sampling_rate}Hz...")
             audio = sd.rec(
                 int(self.duration * self.sampling_rate), 
                 samplerate=self.sampling_rate, 
                 channels=1, 
-                dtype='float32'
+                dtype='float32',
+                device=self.device_id
             )
             sd.wait()
             audio_squeezed = np.squeeze(audio)
