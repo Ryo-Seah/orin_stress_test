@@ -59,15 +59,15 @@ class AudioVADDetector:
                 if device['max_output_channels'] > 0:
                     device_type.append("OUTPUT")
                 
-                marker = "👉" if i == default_input else "  "
-                print(f"{marker} {i}: {device['name']} ({', '.join(device_type)})")
-                print(f"     Channels: In={device['max_input_channels']}, Out={device['max_output_channels']}")
-                print(f"     Sample Rate: {device['default_samplerate']}")
+                # marker = "👉" if i == default_input else "  "
+                # print(f"{marker} {i}: {device['name']} ({', '.join(device_type)})")
+                # print(f"     Channels: In={device['max_input_channels']}, Out={device['max_output_channels']}")
+                # print(f"     Sample Rate: {device['default_samplerate']}")
             
-            print(f"\n🎤 Default input device: {default_input}")
+            # print(f"\n🎤 Default input device: {default_input}")
             
             if self.device_id is None:
-                print(f"🎤 Using default device ({default_input})")
+                # print(f"🎤 Using default device ({default_input})")
                 device_to_use = None  # Use default
             else:
                 print(f"🎤 Attempting to use device {self.device_id} instead of default device {default_input}")
@@ -116,8 +116,8 @@ class AudioVADDetector:
             
             # Verify which device was actually used
             current_device = sd.default.device[0] if device_to_use is None else device_to_use
-            print(f"🎤 Actually used device: {current_device} ({devices[current_device]['name']})")
-            print(f"🎤 Original audio data type: {audio_squeezed.dtype}")
+            # print(f"🎤 Actually used device: {current_device} ({devices[current_device]['name']})")
+            # print(f"🎤 Original audio data type: {audio_squeezed.dtype}")
             
             # Resample audio to model's expected sample rate if needed
             if actual_samplerate != self.sampling_rate:
