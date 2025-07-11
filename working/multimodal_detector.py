@@ -110,9 +110,11 @@ class MultiModalDetector:
                        (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
             y_offset += 30
         
-        # VAD scores
+        # VAD scores with amplitude
         if vad_scores is not None:
             vad_text = f"VAD - V:{vad_scores['valence']:.2f} A:{vad_scores['arousal']:.2f} D:{vad_scores['dominance']:.2f}"
+            if 'amplitude' in vad_scores:
+                vad_text += f" | Amp:{vad_scores['amplitude']:.4f}"
             cv2.putText(annotated_frame, vad_text, 
                        (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 200), 2)
             y_offset += 30
@@ -186,10 +188,15 @@ class MultiModalDetector:
                 if len(self.video_detector.pose_buffer) == self.video_detector.sequence_length:
                     video_stress = self.video_detector.predict_stress()
                 
-                # Get latest VAD scores from audio
+                # Get latest VAD scores from audio and print them with amplitude
                 vad_results = self.audio_processor.process_queue()
                 for vad in vad_results:
-                    print(f"🎭 VAD - V:{vad['valence']:.3f} A:{vad['arousal']:.3f} D:{vad['dominance']:.3f}")
+                    amp_str = f" | Amplitude: {vad['amplitude']:.4f}" if 'amplitude' in vad else ""
+                    print(f"� AUDIO - VAD: V:{vad['valence']:.3f} A:{vad['arousal']:.3f} D:{vad['dominance']:.3f}{amp_str}")
+                
+                # Print video stress separately and clearly
+                if video_stress is not None:
+                    print(f"📹 VIDEO - Stress Score: {video_stress:.3f}")
                 
                 latest_vad = self.audio_detector.get_latest_vad()
                 
@@ -205,13 +212,16 @@ class MultiModalDetector:
                     smoothed_stress = self.video_detector.get_smoothed_stress()
                     smoothed_vad = self.audio_detector.get_smoothed_vad()
                     
-                    vad_str = f"V:{smoothed_vad['valence']:.2f} A:{smoothed_vad['arousal']:.2f} D:{smoothed_vad['dominance']:.2f}" if smoothed_vad else 'N/A'
+                    # Print comprehensive stats
+                    print(f"\n📊 STATS (FPS: {fps:.1f})")
+                    print(f"   📹 Video Stress: {f'{smoothed_stress:.3f}' if smoothed_stress is not None else 'N/A'}")
                     
-                    print("FPS: {:.1f} | Video Stress: {} | VAD: {}".format(
-                        fps,
-                        f"{smoothed_stress:.3f}" if smoothed_stress is not None else 'N/A',
-                        vad_str
-                    ))
+                    if smoothed_vad:
+                        amp_str = f" | Amplitude: {smoothed_vad['amplitude']:.4f}" if 'amplitude' in smoothed_vad else ""
+                        print(f"   🎧 Audio VAD: V:{smoothed_vad['valence']:.2f} A:{smoothed_vad['arousal']:.2f} D:{smoothed_vad['dominance']:.2f}{amp_str}")
+                    else:
+                        print("   🎧 Audio VAD: N/A")
+                    print("")  # Empty line for readability
                 
                 cv2.imshow("Multi-Modal Stress Detection", annotated_frame)
                 

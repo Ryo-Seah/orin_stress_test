@@ -68,12 +68,15 @@ class AudioVADDetector:
             audio: Audio signal
             
         Returns:
-            Dictionary with VAD scores or None if prediction fails
+            Dictionary with VAD scores and amplitude or None if prediction fails
         """
         if not self.audio_available or audio is None:
             return None
             
         try:
+            # Calculate audio amplitude (RMS)
+            amplitude = np.sqrt(np.mean(audio ** 2))
+            
             output = self.audio_model(audio, sampling_rate=self.sampling_rate)
             
             # Debug: Print raw output
@@ -86,14 +89,15 @@ class AudioVADDetector:
                 if len(logits) == 3:
                     arousal, dominance, valence = logits
                     
-                    # Store VAD scores
+                    # Store VAD scores with amplitude
                     vad_dict = {
                         'valence': float(valence),
                         'arousal': float(arousal), 
-                        'dominance': float(dominance)
+                        'dominance': float(dominance),
+                        'amplitude': float(amplitude)
                     }
                     
-                    print(f"🎭 VAD Scores - Valence: {valence:.3f}, Arousal: {arousal:.3f}, Dominance: {dominance:.3f}")
+                    print(f"🎭 VAD Scores - V:{valence:.3f} A:{arousal:.3f} D:{dominance:.3f} | Amplitude: {amplitude:.4f}")
                     
                     # Store in buffer
                     self.vad_buffer.append(vad_dict)
@@ -128,11 +132,13 @@ class AudioVADDetector:
         valence_avg = np.average([vad['valence'] for vad in self.vad_buffer], weights=weights)
         arousal_avg = np.average([vad['arousal'] for vad in self.vad_buffer], weights=weights)
         dominance_avg = np.average([vad['dominance'] for vad in self.vad_buffer], weights=weights)
+        amplitude_avg = np.average([vad['amplitude'] for vad in self.vad_buffer], weights=weights)
         
         return {
             'valence': float(valence_avg),
             'arousal': float(arousal_avg),
-            'dominance': float(dominance_avg)
+            'dominance': float(dominance_avg),
+            'amplitude': float(amplitude_avg)
         }
 
 
