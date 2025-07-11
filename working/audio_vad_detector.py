@@ -112,11 +112,12 @@ class AudioVADDetector:
                 device=device_to_use
             )
             sd.wait()
-            audio_squeezed = np.squeeze(audio)
+            audio_squeezed = np.squeeze(audio).astype(np.float32)  # Ensure float32 type
             
             # Verify which device was actually used
             current_device = sd.default.device[0] if device_to_use is None else device_to_use
             print(f"🎤 Actually used device: {current_device} ({devices[current_device]['name']})")
+            print(f"🎤 Original audio data type: {audio_squeezed.dtype}")
             
             # Resample audio to model's expected sample rate if needed
             if actual_samplerate != self.sampling_rate:
@@ -129,8 +130,9 @@ class AudioVADDetector:
                         np.linspace(0, old_length - 1, new_length),
                         np.arange(old_length),
                         audio_squeezed
-                    )
+                    ).astype(np.float32)  # Ensure float32 type for ONNX model
                     print(f"✅ Resampled from {old_length} to {len(audio_squeezed)} samples")
+                    print(f"✅ Audio data type after resampling: {audio_squeezed.dtype}")
                 except Exception as resample_error:
                     print(f"⚠️  Resampling failed: {resample_error}")
                     print("Using original audio without resampling")
