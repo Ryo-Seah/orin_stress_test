@@ -324,27 +324,29 @@ class RealTimeStressDetector:
         
         return annotated_frame
     
-    def run_realtime_detection(self, camera_id: int = 0):
-        """
-        Run real-time stress detection from camera feed.
-        
-        Args:
-            camera_id: Camera device ID
-        """
-        cap = cv2.VideoCapture(camera_id)
-        if not cap.isOpened():
-            print("❌ Failed to open camera.")
-            return
-        
-        print("✅ Real-time stress detection started. Press 'q' to quit.")
-        print("📋 Accumulating pose data for stress prediction...")
-        
-        frame_count = 0
-        fps_start_time = time.time()
-        
+def run_realtime_detection(self, camera_id: int = 0):
+    """
+    Run real-time stress detection from camera feed.
+    
+    Args:
+        camera_id: Camera device ID
+    """
+    cap = cv2.VideoCapture(camera_id)
+    if not cap.isOpened():
+        print("❌ Failed to open camera.")
+        exit(1)  # Remove the redundant return after exit()
+    
+    print("✅ Real-time stress detection started. Press 'q' to quit.")
+    print("📋 Accumulating pose data for stress prediction...")
+    
+    frame_count = 0
+    fps_start_time = time.time()
+    
+    try:
         while True:
             ret, frame = cap.read()
             if not ret:
+                print("❌ Failed to read frame from camera.")
                 break
             
             frame_count += 1
@@ -379,12 +381,31 @@ class RealTimeStressDetector:
             # Display frame
             cv2.imshow("Real-time Stress Detection", annotated_frame)
             
-            # Check for quit
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            # Check for quit (both 'q' key and window close)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q') or cv2.getWindowProperty("Real-time Stress Detection", cv2.WND_PROP_VISIBLE) < 1:
+                print("✅ Quitting...")
                 break
-        
+    
+    except KeyboardInterrupt:
+        print("\n✅ Interrupted by user (Ctrl+C)")
+    
+    except Exception as e:
+        print(f"❌ Runtime error: {e}")
+        import traceback
+        traceback.print_exc()
+    
+    finally:
+        # Always release camera resources
+        print("🔄 Releasing camera resources...")
         cap.release()
         cv2.destroyAllWindows()
+        
+        # Force close all OpenCV windows (extra safety)
+        for i in range(10):
+            cv2.waitKey(1)
+        
+        print("✅ Camera released successfully")
 
 
 def main():
