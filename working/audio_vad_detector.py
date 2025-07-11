@@ -1,0 +1,207 @@
+"""
+Audio VAD (Valence, Arousal, Dominance) Detection Module
+Handles audio recording and emotion recognition for stress detection system.
+"""
+
+import numpy as np
+import sounddevice as sd
+import audonnx
+from collections import deque
+from typing import Optional, Dict
+import threading
+import queue
+import time
+
+
+class AudioVADDetector:
+    """Audio-based VAD detection using emotion recognition."""
+    
+    def __init__(self, model_path: str, sampling_rate: int = 16000, duration: float = 3.0):
+        """
+        Initialize audio VAD detector.
+        
+        Args:
+            model_path: Path to audio emotion model
+            sampling_rate: Audio sampling rate
+            duration: Audio recording duration in seconds
+        """
+        self.sampling_rate = sampling_rate
+        self.duration = duration
+        self.vad_buffer = deque(maxlen=30)  # Keep last 30 VAD scores
+        
+        # Load audio model
+        try:
+            self.audio_model = audonnx.load(model_path)
+            self.audio_available = True
+            print("✅ Audio emotion model loaded successfully")
+        except Exception as e:
+            print(f"❌ Failed to load audio model: {e}")
+            self.audio_model = None
+            self.audio_available = False
+    
+    def record_audio_chunk(self) -> Optional[np.ndarray]:
+        """Record a short audio chunk."""
+        if not self.audio_available:
+            return None
+            
+        try:
+            print(f"🎤 Recording {self.duration}s audio at {self.sampling_rate}Hz...")
+            audio = sd.rec(
+                int(self.duration * self.sampling_rate), 
+                samplerate=self.sampling_rate, 
+                channels=1, 
+                dtype='float32'
+            )
+            sd.wait()
+            audio_squeezed = np.squeeze(audio)
+            print(f"🎤 Recorded audio shape: {audio_squeezed.shape}, range: [{audio_squeezed.min():.3f}, {audio_squeezed.max():.3f}]")
+            return audio_squeezed
+        except Exception as e:
+            print(f"Audio recording error: {e}")
+            return None
+    
+    def predict_vad(self, audio: np.ndarray) -> Optional[Dict[str, float]]:
+        """
+        Predict VAD (Valence, Arousal, Dominance) from audio.
+        
+        Args:
+            audio: Audio signal
+            
+        Returns:
+            Dictionary with VAD scores or None if prediction fails
+        """
+        if not self.audio_available or audio is None:
+            return None
+            
+        try:
+            output = self.audio_model(audio, sampling_rate=self.sampling_rate)
+            
+            # Debug: Print raw output
+            print(f"🔍 Audio model output keys: {list(output.keys())}")
+            if "logits" in output:
+                print(f"🔍 Audio model logits shape: {output['logits'].shape}")
+                logits = np.squeeze(output["logits"])
+                print(f"🔍 Squeezed logits: {logits}")
+                
+                if len(logits) == 3:
+                    arousal, dominance, valence = logits
+                    
+                    # Store VAD scores
+                    vad_dict = {
+                        'valence': float(valence),
+                        'arousal': float(arousal), 
+                        'dominance': float(dominance)
+                    }
+                    
+                    print(f"🎭 VAD Scores - Valence: {valence:.3f}, Arousal: {arousal:.3f}, Dominance: {dominance:.3f}")
+                    
+                    # Store in buffer
+                    self.vad_buffer.append(vad_dict)
+                    
+                    return vad_dict
+                else:
+                    print(f"❌ Unexpected logits length: {len(logits)}, expected 3")
+            else:
+                print(f"❌ No 'logits' key in output: {list(output.keys())}")
+            
+        except Exception as e:
+            print(f"Audio prediction error: {e}")
+            import traceback
+            traceback.print_exc()
+            
+        return None
+    
+    def get_latest_vad(self) -> Optional[Dict[str, float]]:
+        """Get the latest VAD scores."""
+        if len(self.vad_buffer) > 0:
+            return self.vad_buffer[-1]
+        return None
+    
+    def get_smoothed_vad(self) -> Optional[Dict[str, float]]:
+        """Get smoothed VAD scores using exponential weighted average."""
+        if len(self.vad_buffer) == 0:
+            return None
+        
+        # Use exponential weighted average
+        weights = np.exp(np.linspace(-1, 0, len(self.vad_buffer)))
+        
+        valence_avg = np.average([vad['valence'] for vad in self.vad_buffer], weights=weights)
+        arousal_avg = np.average([vad['arousal'] for vad in self.vad_buffer], weights=weights)
+        dominance_avg = np.average([vad['dominance'] for vad in self.vad_buffer], weights=weights)
+        
+        return {
+            'valence': float(valence_avg),
+            'arousal': float(arousal_avg),
+            'dominance': float(dominance_avg)
+        }
+
+
+class AudioVADProcessor:
+    """Audio VAD processing with threading support."""
+    
+    def __init__(self, detector: AudioVADDetector):
+        """
+        Initialize audio VAD processor.
+        
+        Args:
+            detector: AudioVADDetector instance
+        """
+        self.detector = detector
+        self.vad_queue = queue.Queue(maxsize=5)
+        self.audio_thread = None
+        self.running = False
+    
+    def start_processing(self):
+        """Start audio processing thread."""
+        if not self.detector.audio_available:
+            print("⚠️ Audio not available, skipping audio processing")
+            return
+            
+        self.running = True
+        self.audio_thread = threading.Thread(target=self._audio_processing_loop)
+        self.audio_thread.daemon = True
+        self.audio_thread.start()
+        print("✅ Audio VAD processing thread started")
+    
+    def stop_processing(self):
+        """Stop audio processing thread."""
+        self.running = False
+        if self.audio_thread:
+            self.audio_thread.join(timeout=2)
+            print("✅ Audio VAD processing thread stopped")
+    
+    def _audio_processing_loop(self):
+        """Background thread for audio processing."""
+        while self.running:
+            try:
+                # Record audio
+                audio = self.detector.record_audio_chunk()
+                if audio is not None:
+                    # Predict VAD from audio
+                    vad_scores = self.detector.predict_vad(audio)
+                    if vad_scores is not None:
+                        # Put result in queue for main thread
+                        if not self.vad_queue.full():
+                            self.vad_queue.put(vad_scores)
+                
+            except Exception as e:
+                print(f"Audio thread error: {e}")
+                time.sleep(1)  # Wait before retrying
+    
+    def get_vad_from_queue(self) -> Optional[Dict[str, float]]:
+        """Get VAD scores from queue (non-blocking)."""
+        try:
+            return self.vad_queue.get_nowait()
+        except queue.Empty:
+            return None
+    
+    def process_queue(self) -> list:
+        """Process all VAD scores in queue and return them."""
+        vad_results = []
+        try:
+            while not self.vad_queue.empty():
+                vad_scores = self.vad_queue.get_nowait()
+                vad_results.append(vad_scores)
+        except queue.Empty:
+            pass
+        return vad_results
