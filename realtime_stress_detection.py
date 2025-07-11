@@ -21,7 +21,7 @@ try:
     from stress_training.data_processing import PoseFeatureExtractor
     from stress_training.data_processing import StressScoreCalculator
     IMPORTS_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     print(f"❌ ImportError: {e}")
     print(f"❌ Error type: {type(e).__name__}")
     print(f"❌ Error args: {e.args}")
