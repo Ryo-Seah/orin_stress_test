@@ -1,0 +1,34 @@
+{
+  "config": {
+    "bold_root": "/Users/RyoSeah/Desktop/Stress_Detection/BOLD_public",
+    "sequence_length": 30,
+    "overlap_ratio": 0.5,
+    "min_confidence": 0.3,
+    "model_type": "hybrid",
+    "dropout_rate": 0.3,
+    "batch_size": 32,
+    "epochs": 50,
+    "early_stopping_patience": 10,
+    "reduce_lr_patience": 5,
+    "output_dir": "/Users/RyoSeah/Desktop/Stress_Detection/training_results"
+  },
+  "data_info": {
+    "train_samples": 8956,
+    "val_samples": 1116,
+    "sequence_length": 30,
+    "num_features": 56,
+    "train_stress_mean": 0.5960194547794352,
+    "train_stress_std": 0.16197500409913643,
+    "val_stress_mean": 0.5793450186849346,
+    "val_stress_std": 0.1801119944309138
+  },
+  "evaluation_results": {
+    "val_loss": 0.13005906343460083,
+    "val_mae": 0.13005906343460083,
+    "val_mse": 0.037407826632261276,
+    "val_rmse": 0.19341103027557988,
+    "r2_score": -0.15312695503234863,
+    "mape": 7857431904256.0
+  },
+  "timestamp": "2025-07-09T18:09:54.079704"
+}

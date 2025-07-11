@@ -15,13 +15,13 @@ input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 input_size = input_details[0]['shape'][2]
 
-# GStreamer camera string for Jetson
-gst_str = (
-    "nvarguscamerasrc sensor-id=0 ! "
-    "nvvidconv ! "
-    "videoconvert ! "
-    "video/x-raw, format=BGR ! appsink"
-)
+# GStreamer camera string for Jetson, not needed for USB Camera types
+# gst_str = (
+#     "nvarguscamerasrc sensor-id=0 ! "
+#     "nvvidconv ! "
+#     "videoconvert ! "
+#     "video/x-raw, format=BGR ! appsink"
+# )
 
 # Pose estimation from image
 def detect_pose_movenet(frame):

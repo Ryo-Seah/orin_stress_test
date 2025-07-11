@@ -13,16 +13,19 @@ from collections import deque
 from typing import Optional, Tuple
 
 # Add the stress training directory to path
-stress_training_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'stress_training')
+stress_training_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'stress_training')
 sys.path.append(stress_training_dir)
 
+# Import with relative paths for cross-environment compatibility
 try:
-    from evaluate import StressDetectionEvaluator
-    from data_loader import BOLDDataLoader
+    from stress_training.data_processing.pose_feature_extractor import PoseFeatureExtractor
+    from stress_training.data_processing.stress_score_calculator import StressScoreCalculator
+    IMPORTS_AVAILABLE = True
 except ImportError:
     print("Warning: Could not import stress detection modules. Make sure training modules are available.")
-    StressDetectionEvaluator = None
-    BOLDDataLoader = None
+    PoseFeatureExtractor = None
+    StressScoreCalculator = None
+    IMPORTS_AVAILABLE = False
 
 
 class RealTimeStressDetector:
@@ -75,41 +78,46 @@ class RealTimeStressDetector:
         print(f"MoveNet loaded successfully. Input size: {self.input_size}")
         
     def load_stress_model(self, model_path: str):
-        """Load trained stress detection model."""
+        """Load trained stress detection model (TFLite format)."""
         if not os.path.exists(model_path):
             print(f"Stress model not found at: {model_path}")
-            self.stress_evaluator = None
+            self.stress_interpreter = None
             return
             
         try:
-            config_path = os.path.join(
-                os.path.dirname(os.path.dirname(model_path)), 
-                'logs', 
-                'training_results.json'
-            )
+            # Load TFLite model
+            self.stress_interpreter = tf.lite.Interpreter(model_path=model_path)
+            self.stress_interpreter.allocate_tensors()
             
-            self.stress_evaluator = StressDetectionEvaluator(model_path, config_path)
-            print("Stress detection model loaded successfully")
+            self.stress_input_details = self.stress_interpreter.get_input_details()
+            self.stress_output_details = self.stress_interpreter.get_output_details()
+            
+            print("Stress detection TFLite model loaded successfully")
+            print(f"Input shape: {self.stress_input_details[0]['shape']}")
+            print(f"Output shape: {self.stress_output_details[0]['shape']}")
             
         except Exception as e:
             print(f"Error loading stress model: {e}")
-            self.stress_evaluator = None
+            self.stress_interpreter = None
     
     def setup_feature_extractor(self):
-        """Setup feature extraction using BOLDDataLoader configuration."""
-        try:
-            # Create a data loader for feature extraction
-            # Note: In production, these parameters should be loaded from saved config
-            self.feature_extractor = BOLDDataLoader(
-                bold_root='',  # Not needed for feature extraction only
-                sequence_length=self.sequence_length,
-                overlap_ratio=0.0,  # No overlap needed for real-time
-                min_confidence=self.confidence_threshold
-            )
-        except:
-            print("Warning: Could not setup feature extractor. Stress detection disabled.")
+        """Setup feature extraction using the same components as training."""
+        if not IMPORTS_AVAILABLE:
+            print("Warning: Feature extraction modules not available")
             self.feature_extractor = None
-    
+            self.stress_calculator = None
+            return
+            
+        try:
+            self.feature_extractor = PoseFeatureExtractor(self.confidence_threshold)
+            self.stress_calculator = StressScoreCalculator()
+            print("Feature extractor setup successfully")
+            
+        except Exception as e:
+            print(f"Warning: Could not setup feature extractor: {e}")
+            self.feature_extractor = None
+            self.stress_calculator = None
+        
     def detect_pose_movenet(self, frame: np.ndarray) -> np.ndarray:
         """
         Detect pose using MoveNet.
@@ -200,7 +208,7 @@ class RealTimeStressDetector:
             Stress score (0-1) or None if not enough data
         """
         if (len(self.pose_buffer) < self.sequence_length or 
-            self.stress_evaluator is None or 
+            self.stress_interpreter is None or 
             self.feature_extractor is None):
             return None
         
@@ -209,20 +217,26 @@ class RealTimeStressDetector:
             pose_sequence = np.array(list(self.pose_buffer))  # Shape: (seq_len, 18, 3)
             
             # Extract features using the same method as training
-            features = self.feature_extractor.extract_pose_features(pose_sequence)
-            velocities = self.feature_extractor.compute_velocity_features(features)
+            features = self.feature_extractor.extract_pose_features(pose_sequence, input_format='coco17')
             
-            # Pad velocities to match sequence length
-            padded_velocities = np.vstack([np.zeros((1, velocities.shape[1])), velocities])
-            combined_features = np.hstack([features, padded_velocities])
+            # Reshape for model input (batch_size, sequence_length, num_features)
+            features_input = features.reshape(1, *features.shape).astype(np.float32)
             
-            # Reshape for model input
-            features_input = combined_features.reshape(1, *combined_features.shape)
+            # Set input tensor for TFLite
+            self.stress_interpreter.set_tensor(
+                self.stress_input_details[0]['index'], 
+                features_input
+            )
             
-            # Make prediction
-            stress_score = self.stress_evaluator.predict(features_input.astype(np.float32))
+            # Run inference
+            self.stress_interpreter.invoke()
             
-            return float(stress_score[0])
+            # Get output
+            stress_score = self.stress_interpreter.get_tensor(
+                self.stress_output_details[0]['index']
+            )[0][0]  # Get scalar output
+            
+            return float(stress_score)
             
         except Exception as e:
             print(f"Error predicting stress: {e}")
@@ -372,9 +386,10 @@ class RealTimeStressDetector:
 
 def main():
     """Main function to run real-time stress detection."""
-    # Paths - update these to match your setup
-    stress_model_path = "/Users/RyoSeah/Desktop/Stress_Detection/training_results/models/best_gru_model.h5"
-    movenet_model_path = "/Users/RyoSeah/Desktop/Stress_Detection/movenet_thunder.tflite"
+    # Paths - using relative paths for cross-environment compatibility
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    stress_model_path = os.path.join(base_dir, "training_results", "models", "best_gru_model.tflite")
+    movenet_model_path = os.path.join(base_dir, "movenet_thunder.tflite")
     
     # Check if models exist
     if not os.path.exists(movenet_model_path):
