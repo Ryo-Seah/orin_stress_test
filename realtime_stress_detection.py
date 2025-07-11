@@ -22,6 +22,9 @@ try:
     from stress_training.data_processing import StressScoreCalculator
     IMPORTS_AVAILABLE = True
 except ImportError:
+    print(f"❌ ImportError: {e}")
+    print(f"❌ Error type: {type(e).__name__}")
+    print(f"❌ Error args: {e.args}")
     print("Warning: Could not import stress detection modules. Make sure training modules are available.")
     PoseFeatureExtractor = None
     StressScoreCalculator = None
