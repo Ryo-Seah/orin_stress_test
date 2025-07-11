@@ -175,11 +175,12 @@ class MultiModalDetector:
 def main():
     """Main function to run multi-modal stress detection."""
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(base_dir)  # Go up one level from working folder
     
-    # Model paths
-    stress_model_path = os.path.join(base_dir, "training_results", "models", "gru_stress_model.tflite")
-    movenet_model_path = os.path.join(base_dir, "movenet_thunder.tflite")
-    audio_model_path = os.path.join(base_dir, "model")  # Directory containing audio model
+    # Model paths (relative to parent directory)
+    stress_model_path = os.path.join(parent_dir, "training_results", "models", "gru_stress_model.tflite")
+    movenet_model_path = os.path.join(parent_dir, "movenet_thunder.tflite")
+    audio_model_path = os.path.join(parent_dir, "model")  # Directory containing audio model
     
     # Check if models exist
     if not os.path.exists(movenet_model_path):

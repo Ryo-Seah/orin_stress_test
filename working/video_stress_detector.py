@@ -78,8 +78,10 @@ class VideoStressDetector:
     
     def setup_feature_extractor(self):
         """Setup pose feature extraction."""
-        # Add the stress training directory to path
-        stress_training_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'stress_training')
+        # Add the stress training directory to path (go up one level from working folder)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        stress_training_dir = os.path.join(parent_dir, 'stress_training')
         sys.path.append(stress_training_dir)
         
         try:
