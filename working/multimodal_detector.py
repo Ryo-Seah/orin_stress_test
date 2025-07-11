@@ -7,6 +7,8 @@ import cv2
 import numpy as np
 import time
 import os
+import signal
+import sys
 from typing import Optional, Dict
 
 # Import our custom modules
@@ -46,6 +48,52 @@ class MultiModalDetector:
         self.audio_processor = AudioVADProcessor(self.audio_detector)
         
         self.confidence_threshold = confidence_threshold
+        self.running = False
+        self.cap = None
+        
+        # Setup signal handlers for proper cleanup
+        self.setup_signal_handlers()
+    
+    def setup_signal_handlers(self):
+        """Setup signal handlers for graceful shutdown."""
+        def signal_handler(signum, frame):
+            print(f"\n🛑 Received signal {signum}. Shutting down gracefully...")
+            self.cleanup()
+            sys.exit(0)
+        
+        # Handle various termination signals
+        signal.signal(signal.SIGINT, signal_handler)   # Ctrl+C
+        signal.signal(signal.SIGTERM, signal_handler)  # Termination
+        
+        # Handle Ctrl+Z (SIGTSTP) - suspend signal
+        def suspend_handler(signum, frame):
+            print(f"\n⏸️  Received suspend signal {signum}. Cleaning up resources...")
+            self.cleanup()
+            # Re-raise the signal to actually suspend
+            signal.signal(signal.SIGTSTP, signal.SIG_DFL)
+            os.kill(os.getpid(), signal.SIGTSTP)
+        
+        signal.signal(signal.SIGTSTP, suspend_handler)
+    
+    def cleanup(self):
+        """Clean up all resources."""
+        print("🧹 Cleaning up resources...")
+        
+        # Stop audio processing
+        if hasattr(self, 'audio_processor') and self.audio_processor:
+            self.audio_processor.stop_processing()
+        
+        # Release camera
+        if self.cap and self.cap.isOpened():
+            self.cap.release()
+            print("📷 Camera released")
+        
+        # Close all OpenCV windows
+        cv2.destroyAllWindows()
+        print("🖼️  OpenCV windows closed")
+        
+        self.running = False
+        print("✅ Cleanup completed")
     
     def draw_info(self, frame: np.ndarray, keypoints: np.ndarray, 
                   video_stress: Optional[float], vad_scores: Optional[Dict[str, float]]) -> np.ndarray:
@@ -104,23 +152,28 @@ class MultiModalDetector:
     
     def run_detection(self, camera_id: int = 0):
         """Run multi-modal detection."""
-        cap = cv2.VideoCapture(camera_id)
-        if not cap.isOpened():
+        self.cap = cv2.VideoCapture(camera_id)
+        if not self.cap.isOpened():
             print("❌ Failed to open camera.")
             return
         
         # Start audio processing
         self.audio_processor.start_processing()
+        self.running = True
         
-        print("✅ Multi-modal detection started. Press 'q' to quit.")
+        print("✅ Multi-modal detection started.")
+        print("   Press 'q' to quit")
+        print("   Press Ctrl+C to interrupt")
+        print("   Press Ctrl+Z to suspend")
         
         frame_count = 0
         fps_start_time = time.time()
         
         try:
-            while True:
-                ret, frame = cap.read()
+            while self.running:
+                ret, frame = self.cap.read()
                 if not ret:
+                    print("❌ Failed to read frame from camera")
                     break
                 
                 frame_count += 1
@@ -162,14 +215,22 @@ class MultiModalDetector:
                 
                 cv2.imshow("Multi-Modal Stress Detection", annotated_frame)
                 
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                # Check for 'q' key to quit
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
+                    print("👋 Quit requested by user")
                     break
         
+        except KeyboardInterrupt:
+            print("\n⌨️  Keyboard interrupt received")
+        except Exception as e:
+            print(f"❌ Unexpected error: {e}")
+            import traceback
+            traceback.print_exc()
+        
         finally:
-            # Cleanup
-            self.audio_processor.stop_processing()
-            cap.release()
-            cv2.destroyAllWindows()
+            # Always cleanup regardless of how we exit
+            self.cleanup()
 
 
 def main():
@@ -195,8 +256,10 @@ def main():
         print(f"⚠️ Audio model not found at: {audio_model_path}")
         print("Will continue with video-only detection...")
     
+    detector = None
     try:
         # Initialize multi-modal detector
+        print("🚀 Initializing multi-modal detector...")
         detector = MultiModalDetector(
             stress_model_path=stress_model_path,
             movenet_model_path=movenet_model_path,
@@ -208,11 +271,36 @@ def main():
         # Run detection
         detector.run_detection(camera_id=0)
         
+    except KeyboardInterrupt:
+        print("\n⌨️  Keyboard interrupt in main")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"❌ Error in main: {e}")
         import traceback
         traceback.print_exc()
+    finally:
+        # Ensure cleanup happens even if detector wasn't created
+        if detector:
+            detector.cleanup()
+        print("👋 Application terminated")
 
 
 if __name__ == "__main__":
+    # Additional signal handling at module level
+    def emergency_cleanup(signum, frame):
+        print(f"\n🚨 Emergency cleanup triggered by signal {signum}")
+        try:
+            cv2.destroyAllWindows()
+            # Stop any ongoing sounddevice operations
+            try:
+                import sounddevice as sd
+                sd.stop()
+            except:
+                pass
+        except:
+            pass
+        sys.exit(1)
+    
+    signal.signal(signal.SIGTERM, emergency_cleanup)
+    signal.signal(signal.SIGINT, emergency_cleanup)
+    
     main()

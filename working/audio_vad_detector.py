@@ -165,10 +165,22 @@ class AudioVADProcessor:
     
     def stop_processing(self):
         """Stop audio processing thread."""
+        print("🔇 Stopping audio processing...")
         self.running = False
-        if self.audio_thread:
-            self.audio_thread.join(timeout=2)
-            print("✅ Audio VAD processing thread stopped")
+        if self.audio_thread and self.audio_thread.is_alive():
+            print("⏳ Waiting for audio thread to finish...")
+            self.audio_thread.join(timeout=3)
+            if self.audio_thread.is_alive():
+                print("⚠️  Audio thread did not stop gracefully")
+            else:
+                print("✅ Audio thread stopped successfully")
+        
+        # Try to stop any ongoing audio recording
+        try:
+            sd.stop()
+            print("🎤 Audio recording stopped")
+        except Exception as e:
+            print(f"⚠️  Error stopping audio: {e}")
     
     def _audio_processing_loop(self):
         """Background thread for audio processing."""

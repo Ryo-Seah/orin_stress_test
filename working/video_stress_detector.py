@@ -82,14 +82,20 @@ class VideoStressDetector:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(current_dir)
         stress_training_dir = os.path.join(parent_dir, 'stress_training')
-        sys.path.append(stress_training_dir)
+        
+        if os.path.exists(stress_training_dir):
+            sys.path.insert(0, stress_training_dir)  # Insert at beginning of path
         
         try:
-            from stress_training.data_processing import PoseFeatureExtractor
-            self.feature_extractor = PoseFeatureExtractor(self.confidence_threshold)
+            # Import from the data_processing subdirectory
+            from data_processing.feature_extractor import PoseFeatureExtractor
+            self.feature_extractor = PoseFeatureExtractor(min_confidence=self.confidence_threshold)
             print("✅ Pose feature extractor setup successfully")
+        except ImportError as e:
+            print(f"❌ ImportError: {e}")
+            self.feature_extractor = None
         except Exception as e:
-            print(f"Warning: Could not setup pose feature extractor: {e}")
+            print(f"❌ Unexpected error setting up pose feature extractor: {e}")
             self.feature_extractor = None
     
     def detect_pose(self, frame: np.ndarray) -> np.ndarray:
