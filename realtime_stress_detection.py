@@ -18,8 +18,8 @@ sys.path.append(stress_training_dir)
 
 # Import with relative paths for cross-environment compatibility
 try:
-    from stress_training.data_processing.pose_feature_extractor import PoseFeatureExtractor
-    from stress_training.data_processing.stress_score_calculator import StressScoreCalculator
+    from stress_training.data_processing import PoseFeatureExtractor
+    from stress_training.data_processing import StressScoreCalculator
     IMPORTS_AVAILABLE = True
 except ImportError:
     print("Warning: Could not import stress detection modules. Make sure training modules are available.")
