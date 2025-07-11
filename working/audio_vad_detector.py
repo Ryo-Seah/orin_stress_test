@@ -45,6 +45,11 @@ class AudioVADDetector:
             return None
             
         try:
+            # Check available audio devices
+            devices = sd.query_devices()
+            default_input = sd.default.device[0] if hasattr(sd.default, 'device') else None
+            print(f"🎤 Default input device: {default_input}")
+            
             print(f"🎤 Recording {self.duration}s audio at {self.sampling_rate}Hz...")
             audio = sd.rec(
                 int(self.duration * self.sampling_rate), 
@@ -54,7 +59,17 @@ class AudioVADDetector:
             )
             sd.wait()
             audio_squeezed = np.squeeze(audio)
-            print(f"🎤 Recorded audio shape: {audio_squeezed.shape}, range: [{audio_squeezed.min():.3f}, {audio_squeezed.max():.3f}]")
+            
+            # Enhanced debugging
+            print(f"🎤 Recorded audio shape: {audio_squeezed.shape}")
+            print(f"🎤 Audio range: [{audio_squeezed.min():.6f}, {audio_squeezed.max():.6f}]")
+            print(f"🎤 Audio std: {audio_squeezed.std():.6f}")
+            print(f"🎤 Non-zero values: {np.count_nonzero(audio_squeezed)}/{len(audio_squeezed)}")
+            
+            # Check if audio is all zeros
+            if np.all(audio_squeezed == 0):
+                print("⚠️  WARNING: Audio is all zeros! Check microphone permissions and hardware.")
+            
             return audio_squeezed
         except Exception as e:
             print(f"Audio recording error: {e}")
@@ -76,6 +91,22 @@ class AudioVADDetector:
         try:
             # Calculate audio amplitude (RMS)
             amplitude = np.sqrt(np.mean(audio ** 2))
+            
+            # Additional amplitude metrics for debugging
+            peak_amplitude = np.max(np.abs(audio))
+            mean_amplitude = np.mean(np.abs(audio))
+            
+            print(f"📊 Audio Analysis:")
+            print(f"   RMS Amplitude: {amplitude:.6f}")
+            print(f"   Peak Amplitude: {peak_amplitude:.6f}")
+            print(f"   Mean Absolute: {mean_amplitude:.6f}")
+            
+            # If amplitude is very low, suggest checking microphone
+            if amplitude < 1e-6:
+                print("⚠️  Very low amplitude detected. Check:")
+                print("   - Microphone permissions in System Preferences")
+                print("   - Microphone hardware connection")
+                print("   - Audio input levels")
             
             output = self.audio_model(audio, sampling_rate=self.sampling_rate)
             
