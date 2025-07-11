@@ -388,7 +388,7 @@ def main():
     """Main function to run real-time stress detection."""
     # Paths - using relative paths for cross-environment compatibility
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    stress_model_path = os.path.join(base_dir, "training_results", "models", "best_gru_model.tflite")
+    stress_model_path = os.path.join(base_dir, "training_results", "models", "gru_stress_model.tflite")
     movenet_model_path = os.path.join(base_dir, "movenet_thunder.tflite")
     
     # Check if models exist
