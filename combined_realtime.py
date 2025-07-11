@@ -60,6 +60,7 @@ class AudioStressDetector:
         self.sampling_rate = sampling_rate
         self.duration = duration
         self.audio_buffer = deque(maxlen=10)  # Keep last 10 audio predictions
+        self.vad_scores = deque(maxlen=10)  # Keep last 10 VAD scores
         
         # Load audio model
         try:
@@ -77,6 +78,7 @@ class AudioStressDetector:
             return None
             
         try:
+            print(f"🎤 Recording {self.duration}s audio at {self.sampling_rate}Hz...")
             audio = sd.rec(
                 int(self.duration * self.sampling_rate), 
                 samplerate=self.sampling_rate, 
@@ -84,36 +86,58 @@ class AudioStressDetector:
                 dtype='float32'
             )
             sd.wait()
-            return np.squeeze(audio)
+            audio_squeezed = np.squeeze(audio)
+            print(f"🎤 Recorded audio shape: {audio_squeezed.shape}, range: [{audio_squeezed.min():.3f}, {audio_squeezed.max():.3f}]")
+            return audio_squeezed
         except Exception as e:
             print(f"Audio recording error: {e}")
             return None
     
-    def predict_audio_stress(self, audio: np.ndarray) -> Optional[float]:
+    def predict_audio_vad(self, audio: np.ndarray) -> Optional[Dict[str, float]]:
         """
-        Predict stress from audio.
+        Predict VAD (Valence, Arousal, Dominance) from audio.
         
         Args:
             audio: Audio signal
             
         Returns:
-            Stress score from 0-1 (based on arousal)
+            Dictionary with VAD scores or None if prediction fails
         """
         if not self.audio_available or audio is None:
             return None
             
         try:
             output = self.audio_model(audio, sampling_rate=self.sampling_rate)
-            logits = np.squeeze(output["logits"])
             
-            if len(logits) == 3:
-                arousal, dominance, valence = logits
-                # Convert arousal to 0-1 stress score (arousal typically ranges from -1 to 1)
-                stress_score = (arousal + 1) / 2  # Normalize to 0-1
-                return max(0.0, min(1.0, float(stress_score)))
+            # Debug: Print raw output
+            print(f"🔍 Audio model output keys: {list(output.keys())}")
+            if "logits" in output:
+                print(f"🔍 Audio model logits shape: {output['logits'].shape}")
+                logits = np.squeeze(output["logits"])
+                print(f"🔍 Squeezed logits: {logits}")
+                
+                if len(logits) == 3:
+                    arousal, dominance, valence = logits
+                    
+                    # Store VAD scores
+                    vad_dict = {
+                        'valence': float(valence),
+                        'arousal': float(arousal), 
+                        'dominance': float(dominance)
+                    }
+                    
+                    print(f"🎭 VAD Scores - Valence: {valence:.3f}, Arousal: {arousal:.3f}, Dominance: {dominance:.3f}")
+                    
+                    return vad_dict
+                else:
+                    print(f"❌ Unexpected logits length: {len(logits)}, expected 3")
+            else:
+                print(f"❌ No 'logits' key in output: {list(output.keys())}")
             
         except Exception as e:
             print(f"Audio prediction error: {e}")
+            import traceback
+            traceback.print_exc()
             
         return None
     
@@ -293,14 +317,18 @@ class MultiModalStressDetector:
                 # Record audio
                 audio = self.audio_detector.record_audio_chunk()
                 if audio is not None:
-                    # Predict stress from audio
-                    audio_stress = self.audio_detector.predict_audio_stress(audio)
-                    if audio_stress is not None:
-                        self.audio_detector.audio_buffer.append(audio_stress)
+                    # Predict VAD from audio
+                    vad_scores = self.audio_detector.predict_audio_vad(audio)
+                    if vad_scores is not None:
+                        
+                        # Store VAD scores in a buffer for display
+                        if not hasattr(self.audio_detector, 'vad_buffer'):
+                            self.audio_detector.vad_buffer = deque(maxlen=30)  # Keep last 30 VAD scores
+                        self.audio_detector.vad_buffer.append(vad_scores)
                         
                         # Put result in queue for main thread
                         if not self.audio_queue.full():
-                            self.audio_queue.put(audio_stress)
+                            self.audio_queue.put(vad_scores)
                 
             except Exception as e:
                 print(f"Audio thread error: {e}")
@@ -308,33 +336,21 @@ class MultiModalStressDetector:
     
     def get_combined_stress_score(self) -> Dict[str, Optional[float]]:
         """
-        Get combined stress scores from both modalities.
+        Get stress scores from video modality only.
         
         Returns:
-            Dictionary with video_stress, audio_stress, and combined_stress
+            Dictionary with video_stress only (audio stress removed)
         """
-        # Get smoothed scores
+        # Get smoothed video scores
         video_stress = None
         if len(self.video_stress_scores) > 0:
             weights = np.exp(np.linspace(-1, 0, len(self.video_stress_scores)))
             video_stress = float(np.average(list(self.video_stress_scores), weights=weights))
         
-        audio_stress = self.audio_detector.get_smoothed_audio_stress()
-        
-        # Combine scores with weighted average
-        combined_stress = None
-        if video_stress is not None and audio_stress is not None:
-            # Weight video more heavily (0.7) as it's more reliable for stress
-            combined_stress = 0.7 * video_stress + 0.3 * audio_stress
-        elif video_stress is not None:
-            combined_stress = video_stress
-        elif audio_stress is not None:
-            combined_stress = audio_stress
-        
         return {
             'video_stress': video_stress,
-            'audio_stress': audio_stress,
-            'combined_stress': combined_stress
+            'audio_stress': None,  # No longer computing audio stress
+            'combined_stress': video_stress  # Only video stress now
         }
     
     def draw_multi_modal_info(self, frame: np.ndarray, keypoints: np.ndarray, 
@@ -359,14 +375,15 @@ class MultiModalStressDetector:
                        (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
             y_offset += 30
         
-        # Audio stress
-        audio_stress = stress_scores['audio_stress']
-        if audio_stress is not None:
-            cv2.putText(annotated_frame, f"Audio Stress: {audio_stress:.3f}", 
-                       (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        # Display VAD scores if available (no audio stress conversion)
+        vad_scores = self.get_latest_vad_scores()
+        if vad_scores is not None:
+            vad_text = f"VAD - V:{vad_scores['valence']:.2f} A:{vad_scores['arousal']:.2f} D:{vad_scores['dominance']:.2f}"
+            cv2.putText(annotated_frame, vad_text, 
+                       (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 200, 200), 2)
             y_offset += 30
         
-        # Combined stress
+        # Video-only stress (since audio only provides VAD now)
         combined_stress = stress_scores['combined_stress']
         if combined_stress is not None:
             # Determine stress level and color
@@ -377,7 +394,7 @@ class MultiModalStressDetector:
             else:
                 level, color = "HIGH", (0, 0, 255)
             
-            cv2.putText(annotated_frame, f"Combined Stress: {combined_stress:.3f} ({level})", 
+            cv2.putText(annotated_frame, f"Overall Stress: {combined_stress:.3f} ({level})", 
                        (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
             
             # Stress bar
@@ -392,7 +409,8 @@ class MultiModalStressDetector:
                          (bar_x + fill_width, bar_y + bar_height), color, -1)
         
         # Buffer status
-        buffer_text = f"Pose Buffer: {len(self.pose_buffer)}/{self.sequence_length}"
+        vad_buffer_size = len(self.audio_detector.vad_buffer) if hasattr(self.audio_detector, 'vad_buffer') else 0
+        buffer_text = f"Video: {len(self.pose_buffer)}/{self.sequence_length} | VAD: {vad_buffer_size}"
         cv2.putText(annotated_frame, buffer_text, (10, h - 20),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         
@@ -437,10 +455,12 @@ class MultiModalStressDetector:
                     if video_stress is not None:
                         self.video_stress_scores.append(video_stress)
                 
-                # Get audio stress from queue (non-blocking)
+                # Get VAD scores from queue (non-blocking)
                 try:
                     while not self.audio_queue.empty():
-                        self.audio_queue.get_nowait()  # Just consume to keep queue fresh
+                        vad_scores = self.audio_queue.get_nowait()
+                        # Display VAD scores
+                        print(f" VAD - V:{vad_scores['valence']:.3f} A:{vad_scores['arousal']:.3f} D:{vad_scores['dominance']:.3f}")
                 except queue.Empty:
                     pass
                 
@@ -454,12 +474,16 @@ class MultiModalStressDetector:
                 if frame_count % 30 == 0:
                     fps = 30 / (time.time() - fps_start_time)
                     fps_start_time = time.time()
-                    print("FPS: {:.1f} | Video: {} | Audio: {} | Combined: {}".format(
-                    fps,
-                    f"{stress_scores['video_stress']:.3f}" if stress_scores['video_stress'] is not None else 'N/A',
-                    f"{stress_scores['audio_stress']:.3f}" if stress_scores['audio_stress'] is not None else 'N/A',
-                    f"{stress_scores['combined_stress']:.3f}" if stress_scores['combined_stress'] is not None else 'N/A'
-))
+                    
+                    # Get latest VAD scores for display
+                    latest_vad = self.get_latest_vad_scores()
+                    vad_str = f"V:{latest_vad['valence']:.2f} A:{latest_vad['arousal']:.2f} D:{latest_vad['dominance']:.2f}" if latest_vad else 'N/A'
+                    
+                    print("FPS: {:.1f} | Video Stress: {} | VAD: {}".format(
+                        fps,
+                        f"{stress_scores['video_stress']:.3f}" if stress_scores['video_stress'] is not None else 'N/A',
+                        vad_str
+                    ))
                 
                 cv2.imshow("Multi-Modal Stress Detection", annotated_frame)
                 
