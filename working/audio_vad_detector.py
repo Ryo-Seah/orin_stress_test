@@ -48,8 +48,21 @@ class AudioVADDetector:
             # Check available audio devices
             devices = sd.query_devices()
             default_input = sd.default.device[0] if hasattr(sd.default, 'device') else None
-            print(f"🎤 Default input device: {default_input}")
             
+            print("🎤 Available Audio Devices:")
+            for i, device in enumerate(devices):
+                device_type = []
+                if device['max_input_channels'] > 0:
+                    device_type.append("INPUT")
+                if device['max_output_channels'] > 0:
+                    device_type.append("OUTPUT")
+                
+                marker = "👉" if i == default_input else "  "
+                print(f"{marker} {i}: {device['name']} ({', '.join(device_type)})")
+                print(f"     Channels: In={device['max_input_channels']}, Out={device['max_output_channels']}")
+                print(f"     Sample Rate: {device['default_samplerate']}")
+            
+            print(f"\n🎤 Default input device: {default_input}")
             print(f"🎤 Recording {self.duration}s audio at {self.sampling_rate}Hz...")
             audio = sd.rec(
                 int(self.duration * self.sampling_rate), 
