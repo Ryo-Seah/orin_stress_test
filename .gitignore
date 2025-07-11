@@ -1,1 +1,8 @@
 venv
+*.pycS
+BOLD_public
+*.pyc
+*.pyo
+__pycache__
+*.pyd
+*.png

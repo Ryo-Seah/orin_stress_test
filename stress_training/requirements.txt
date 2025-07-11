@@ -1,0 +1,23 @@
+# Requirements for stress detection training and inference
+# Core ML and data processing
+tensorflow>=2.10.0
+numpy>=1.21.0
+pandas>=1.5.0
+scikit-learn>=1.1.0
+
+# Computer vision
+opencv-python>=4.5.0
+
+# Visualization
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Utilities
+tqdm>=4.64.0
+
+# For TensorFlow Lite deployment (optional, lighter alternative)
+# tflite-runtime>=2.10.0
+
+# For Jetson Orin Nano (uncomment if training directly on device)
+# Note: TensorFlow for Jetson should be installed via NVIDIA's instructions
+# tensorflow-aarch64  # For ARM64 architecture
