@@ -78,9 +78,10 @@ class AudioVADDetector:
                     device_to_use = None  # Use default
                 elif devices[self.device_id]['max_input_channels'] == 0:
                     print(f"❌ Device {self.device_id} has no input channels! Using default device instead.")
-                    device_to_use = None  # Use default            else:
-                print(f"✅ Device {self.device_id} is valid: {devices[self.device_id]['name']}")
-                device_to_use = self.device_id
+                    device_to_use = None  # Use default
+                else:
+                    print(f"✅ Device {self.device_id} is valid: {devices[self.device_id]['name']}")
+                    device_to_use = self.device_id
             
             # Check supported sample rate for the device
             if device_to_use is not None:
