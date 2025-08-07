@@ -1,16 +1,16 @@
 """
 Handles BOLD dataset loading and preprocessing for training.
 """
-import numpy as np
-import pandas as pd
 import os
 from typing import Tuple, Dict
+
+import numpy as np
+import pandas as pd
 from sklearn.preprocessing import StandardScaler
 import tensorflow as tf
-
 from .pose_converter import PoseFormatConverter
 from .feature_extractor import PoseFeatureExtractor
-from .stress_calculator import StressScoreCalculator
+
 
 class BOLDDataset:
     """Main class for loading and preprocessing BOLD dataset for stress detection training."""
@@ -18,7 +18,6 @@ class BOLDDataset:
     def __init__(self, 
                  bold_root: str,
                  sequence_length: int = 30,
-                 overlap_ratio: float = 0.5,
                  min_confidence: float = 0.3):
         """
         Initialize BOLD dataset loader.
@@ -26,18 +25,17 @@ class BOLDDataset:
         Args:
             bold_root: Path to BOLD dataset root directory
             sequence_length: Fixed length for all sequences
-            overlap_ratio: Overlap ratio for sliding windows (not used in segment mode)
+
             min_confidence: Minimum confidence threshold for keypoints
         """
         self.bold_root = bold_root
         self.sequence_length = sequence_length
-        self.overlap_ratio = overlap_ratio
+
         self.min_confidence = min_confidence
         
         # Initialize components
         self.pose_converter = PoseFormatConverter(min_confidence)
         self.feature_extractor = PoseFeatureExtractor(min_confidence)
-        self.stress_calculator = StressScoreCalculator()
         self.scaler = StandardScaler()
         self._scaler_fitted = False
     
@@ -57,21 +55,24 @@ class BOLDDataset:
         
         if not os.path.exists(annotations_file):
             print(f"❌ Annotations file {annotations_file} not found")
-            return np.array([]), np.array([])
+            raise Exception(f"Annotations file {annotations_file} not found")
         
         # Read CSV without header since BOLD format doesn't have headers
         annotations_df = pd.read_csv(annotations_file, header=None)
         print(f"✅ Found {split} annotations with {len(annotations_df)} rows and {len(annotations_df.columns)} columns")
         
-        # BOLD CSV format: video_file, person_id, start_frame, end_frame, categorical_emotions(26), valence, arousal, dominance, gender, age, ethnicity
-        column_names = ['video_file', 'person_id', 'start_frame', 'end_frame', 'categorical', 'valence', 'arousal', 'dominance', 'gender', 'age', 'ethnicity']
+        # BOLD CSV format: video_file, person_id, start_frame, end_frame, 26 emotion categories, valence, arousal, dominance, gender, age, ethnicity, confidence
+        column_names = [
+            'video_file', 'person_id', 'start_frame', 'end_frame',
+        ] + [f'emotion_{i+1}' for i in range(26)] + [
+            'valence', 'arousal', 'dominance', 'gender', 'age', 'ethnicity', 'confidence'
+        ]
         
-        # Handle variable number of columns
-        while len(column_names) < len(annotations_df.columns):
+        # Assign column names, should have no extras but handles
+        while len(column_names) < annotations_df.shape[1]:
             column_names.append(f'extra_{len(column_names)}')
-        
-        annotations_df.columns = column_names[:len(annotations_df.columns)]
-        
+        annotations_df.columns = column_names[:annotations_df.shape[1]]
+
         print(f"🔍 Sample video file: {annotations_df['video_file'].iloc[0] if len(annotations_df) > 0 else 'None'}")
         
         X_segments = []
@@ -139,17 +140,15 @@ class BOLDDataset:
                     segment_poses, input_format='bold18'
                 )
 
-                # Compute stress score from annotations
-                annotation_dict = {
-                    'categorical': annotation['categorical'],
-                    'valence': annotation['valence'],
-                    'arousal': annotation['arousal'],
-                    'dominance': annotation['dominance']
-                }
-                stress_score = self.stress_calculator.compute_stress_score(annotation_dict)
+                # Use raw VAD values as targets
+                vad = np.array([
+                    float(annotation['valence']),
+                    float(annotation['arousal']),
+                    float(annotation['dominance'])
+                ], dtype=np.float32)
 
                 X_segments.append(segment_features)
-                y_segments.append(stress_score)
+                y_segments.append(vad)
                 processed_count += 1
 
                 if processed_count % 50 == 0:
@@ -257,17 +256,6 @@ class BOLDDataset:
             coco17_sequence, input_format='coco17'
         )
     
-    def compute_stress_score_realtime(self, coco17_keypoints: np.ndarray) -> float:
-        """
-        Compute real-time stress score from pose keypoints.
-        
-        Args:
-            coco17_keypoints: COCO-17 format keypoints
-            
-        Returns:
-            Estimated stress score between 0 and 5
-        """
-        return self.stress_calculator.compute_stress_score_realtime(coco17_keypoints)
     
     def convert_bold18_to_coco17(self, bold_keypoints: np.ndarray) -> np.ndarray:
         """Convert BOLD-18 to COCO-17 format."""

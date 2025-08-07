@@ -48,19 +48,36 @@ class StressDetectionTrainer:
         print(f"🔍 DEBUG: BOLD root path from config: {self.config['bold_root']}")
         print(f"🔍 DEBUG: Does path exist? {os.path.exists(self.config['bold_root'])}")
         
-        # List what's actually in the directory
-        if os.path.exists(self.config['bold_root']):
-            print(f"🔍 DEBUG: Contents of {self.config['bold_root']}:")
-            for item in os.listdir(self.config['bold_root']):
-                print(f"  - {item}")
-        
         self.data_loader = BOLDDataset(
             bold_root=self.config['bold_root'],
             sequence_length=self.config['sequence_length'],
-            overlap_ratio=self.config['overlap_ratio'],
             min_confidence=self.config['min_confidence']
         )
-        
+    
+    
+    def plot_vad_distribution(self, y, split_name="train"):
+        """Plot the distribution of VAD values."""
+        import matplotlib.pyplot as plt
+        import numpy as np
+        vad_names = ['Valence', 'Arousal', 'Dominance']
+        bin_edges = np.arange(0, 10.5, 0.5)  # 0.0 to 10.0 in 0.5 steps
+        bin_labels = [f"{bin_edges[i]:.2f}-{bin_edges[i+1]:.2f}" for i in range(len(bin_edges)-1)]
+        fig, axes = plt.subplots(1, 3, figsize=(18, 5), sharey=True)
+        for i in range(3):
+            counts, _ = np.histogram(y[:, i], bins=bin_edges)
+            axes[i].bar(bin_labels, counts, width=0.8, align='center', alpha=0.7)
+            axes[i].set_xticks(range(len(bin_labels)))
+            axes[i].set_xticklabels(bin_labels, rotation=90, fontsize=8)
+            axes[i].set_xlabel(f"{vad_names[i]} Bin")
+            axes[i].set_title(f"{vad_names[i]} Distribution\n(Total: {int(np.sum(counts))})")
+            for idx, count in enumerate(counts):
+                axes[i].text(idx, count, str(count), ha='center', va='bottom', fontsize=7)
+        axes[0].set_ylabel("Count")
+        plt.suptitle(f"VAD Distribution in {split_name} set (bin size=0.05)")
+        plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+        plt.savefig(os.path.join(self.config['output_dir'], 'plots', f'vad_distribution_{split_name}.png'))
+        plt.close()
+
     def load_and_preprocess_data(self):
         """Load and preprocess the dataset."""
         print("Loading and preprocessing data...")
@@ -71,6 +88,10 @@ class StressDetectionTrainer:
         
         if len(X_train) == 0 or len(X_val) == 0:
             raise ValueError("No valid data found! Check dataset paths and format.")
+        
+        # Plot VAD distributions
+        self.plot_vad_distribution(y_train, split_name="train")
+        self.plot_vad_distribution(y_val, split_name="val")
         
         # Fit scaler on training data and transform both sets
         print("Fitting feature scaler...")
@@ -89,6 +110,14 @@ class StressDetectionTrainer:
             batch_size=self.config['batch_size'], 
             shuffle=False
         )
+        
+
+        self.data_info = {
+            'train_samples':   len(X_train),
+            'val_samples':     len(X_val),
+            'sequence_length': X_train.shape[1],
+            'num_features':    X_train.shape[2],
+        }
         
         # Store data info
         self.data_info = {
@@ -176,34 +205,28 @@ class StressDetectionTrainer:
         val_loss, val_mae, val_mse = self.model.evaluate(self.val_dataset, verbose=0)
         
         # Generate predictions for analysis
-        y_pred = self.model.predict(self.val_dataset, verbose=0).flatten()
-        
-        # Get true values (need to reconstruct from dataset)
+        y_pred = self.model.predict(self.val_dataset, verbose=0)
         y_true = []
         for _, labels in self.val_dataset:
             y_true.extend(labels.numpy())
         y_true = np.array(y_true)
         
-        # Calculate additional metrics
-        from sklearn.metrics import r2_score, mean_absolute_percentage_error
-        r2 = r2_score(y_true, y_pred)
-        mape = mean_absolute_percentage_error(y_true, y_pred)
-        
+        # Calculate additional metrics for each VAD component
+        from sklearn.metrics import r2_score, mean_absolute_error
+        r2 = r2_score(y_true, y_pred, multioutput='raw_values')
+        mae = mean_absolute_error(y_true, y_pred, multioutput='raw_values')
         self.evaluation_results = {
             'val_loss': float(val_loss),
             'val_mae': float(val_mae),
             'val_mse': float(val_mse),
             'val_rmse': float(np.sqrt(val_mse)),
-            'r2_score': float(r2),
-            'mape': float(mape)
-        }
+            'r2_score': r2.tolist(),
+            'mae': mae.tolist()
+        };
         
-        print(f"Evaluation Results:")
-        print(f"  Loss: {val_loss:.4f}")
-        print(f"  MAE: {val_mae:.4f}")
-        print(f"  RMSE: {np.sqrt(val_mse):.4f}")
-        print(f"  R²: {r2:.4f}")
-        print(f"  MAPE: {mape:.4f}")
+        print(f"Evaluation Results (per VAD component):")
+        for i, comp in enumerate(['Valence', 'Arousal', 'Dominance']):
+            print(f"  {comp}: R²={r2[i]:.4f}, MAE={mae[i]:.4f}")
         
         return y_true, y_pred
         
@@ -246,37 +269,23 @@ class StressDetectionTrainer:
         plt.close()
         
     def plot_predictions(self, y_true, y_pred):
-        """Plot prediction analysis."""
-        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-        
-        # Scatter plot: True vs Predicted
-        axes[0, 0].scatter(y_true, y_pred, alpha=0.6)
-        axes[0, 0].plot([y_true.min(), y_true.max()], [y_true.min(), y_true.max()], 'r--', lw=2)
-        axes[0, 0].set_xlabel('True Stress Score')
-        axes[0, 0].set_ylabel('Predicted Stress Score')
-        axes[0, 0].set_title('True vs Predicted Stress Scores')
-        
-        # Residuals
-        residuals = y_true - y_pred
-        axes[0, 1].scatter(y_pred, residuals, alpha=0.6)
-        axes[0, 1].axhline(y=0, color='r', linestyle='--')
-        axes[0, 1].set_xlabel('Predicted Stress Score')
-        axes[0, 1].set_ylabel('Residuals')
-        axes[0, 1].set_title('Residual Plot')
-        
-        # Distribution of predictions
-        axes[1, 0].hist(y_true, alpha=0.7, label='True', bins=30)
-        axes[1, 0].hist(y_pred, alpha=0.7, label='Predicted', bins=30)
-        axes[1, 0].set_xlabel('Stress Score')
-        axes[1, 0].set_ylabel('Frequency')
-        axes[1, 0].set_title('Distribution of Stress Scores')
-        axes[1, 0].legend()
-        
-        # Error distribution
-        axes[1, 1].hist(residuals, bins=30, alpha=0.7)
-        axes[1, 1].set_xlabel('Prediction Error')
-        axes[1, 1].set_ylabel('Frequency')
-        axes[1, 1].set_title('Distribution of Prediction Errors')
+        """Plot prediction analysis for VAD."""
+        fig, axes = plt.subplots(2, 3, figsize=(18, 8))
+        vad_names = ['Valence', 'Arousal', 'Dominance']
+        for i in range(3):
+            # Scatter plot: True vs Predicted
+            axes[0, i].scatter(y_true[:, i], y_pred[:, i], alpha=0.6)
+            axes[0, i].plot([y_true[:, i].min(), y_true[:, i].max()], [y_true[:, i].min(), y_true[:, i].max()], 'r--', lw=2)
+            axes[0, i].set_xlabel(f'True {vad_names[i]}')
+            axes[0, i].set_ylabel(f'Predicted {vad_names[i]}')
+            axes[0, i].set_title(f'True vs Predicted {vad_names[i]}')
+            
+            # Residuals
+            residuals = y_true[:, i] - y_pred[:, i]
+            axes[1, i].hist(residuals, bins=30, alpha=0.7)
+            axes[1, i].set_xlabel(f'{vad_names[i]} Prediction Error')
+            axes[1, i].set_ylabel('Frequency')
+            axes[1, i].set_title(f'{vad_names[i]} Error Distribution')
         
         plt.tight_layout()
         plt.savefig(os.path.join(self.config['output_dir'], 'plots', 'prediction_analysis.png'))
@@ -387,7 +396,7 @@ def main():
                        default='/Users/RyoSeah/Desktop/Stress_Detection/BOLD_public',
                        help='Path to BOLD dataset root directory')
     
-    parser.add_argument('--model_type', type=str, default='tcn', 
+    parser.add_argument('--model_type', type=str, default='gru', 
                        choices=['gru', 'tcn', 'lstm', 'hybrid'],
                        help='Model architecture to use')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')

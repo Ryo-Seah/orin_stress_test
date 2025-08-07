@@ -21,7 +21,7 @@ class StressDetectionModel:
                        dropout_rate: float = 0.3,
                        recurrent_dropout: float = 0.2) -> Model:
         """
-        Build a GRU-based model for stress detection.
+        Build a GRU-based model for VAD regression.
         
         Args:
             input_shape: (sequence_length, num_features)
@@ -53,7 +53,7 @@ class StressDetectionModel:
             layers.Dense(16, activation='relu', name='dense_1'),
             layers.Dropout(dropout_rate),
             layers.Dense(8, activation='relu', name='dense_2'),
-            layers.Dense(1, activation='sigmoid', name='stress_output')
+            layers.Dense(3, activation='linear', name='vad_output')  # 3 outputs for VAD
         ])
         
         model.compile(
@@ -71,7 +71,7 @@ class StressDetectionModel:
                        num_blocks: int = 3,
                        dropout_rate: float = 0.3) -> Model:
         """
-        Build a Temporal Convolutional Network (TCN) for stress detection.
+        Build a Temporal Convolutional Network (TCN) for VAD regression.
         
         Args:
             input_shape: (sequence_length, num_features)
@@ -119,7 +119,7 @@ class StressDetectionModel:
         x = layers.Dense(32, activation='relu')(x)
         x = layers.Dropout(dropout_rate)(x)
         x = layers.Dense(16, activation='relu')(x)
-        outputs = layers.Dense(1, activation='sigmoid', name='stress_output')(x)
+        outputs = layers.Dense(3, activation='linear', name='vad_output')(x)
         
         model = Model(inputs, outputs)
         model.compile(
@@ -134,7 +134,7 @@ class StressDetectionModel:
     def build_lightweight_lstm(input_shape: Tuple[int, int],
                               dropout_rate: float = 0.3) -> Model:
         """
-        Build a lightweight LSTM model as an alternative to GRU.
+        Build a lightweight LSTM model for VAD regression.
         
         Args:
             input_shape: (sequence_length, num_features)
@@ -155,7 +155,7 @@ class StressDetectionModel:
             # Dense layers
             layers.Dense(8, activation='relu', name='dense_1'),
             layers.Dropout(dropout_rate),
-            layers.Dense(1, activation='sigmoid', name='stress_output')
+            layers.Dense(3, activation='linear', name='vad_output')
         ])
         
         model.compile(
@@ -170,7 +170,7 @@ class StressDetectionModel:
     def build_hybrid_model(input_shape: Tuple[int, int],
                           dropout_rate: float = 0.3) -> Model:
         """
-        Build a hybrid model combining CNN and GRU for temporal and spatial features.
+        Build a hybrid model for VAD regression.
         
         Args:
             input_shape: (sequence_length, num_features)
@@ -196,7 +196,7 @@ class StressDetectionModel:
         # Final prediction layers
         x = layers.Dense(8, activation='relu')(x)
         x = layers.Dropout(dropout_rate)(x)
-        outputs = layers.Dense(1, activation='sigmoid', name='stress_output')(x)
+        outputs = layers.Dense(3, activation='linear', name='vad_output')(x)
         
         model = Model(inputs, outputs)
         model.compile(
