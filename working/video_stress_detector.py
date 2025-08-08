@@ -35,6 +35,7 @@ class VideoStressDetector:
         # Initialize buffers
         self.pose_buffer = deque(maxlen=sequence_length)
         self.video_stress_scores = deque(maxlen=50)
+        self.video_vad_scores = deque(maxlen=50)
         
         # Load models
         self.load_movenet_model(movenet_model_path)
@@ -146,8 +147,8 @@ class VideoStressDetector:
         self.pose_buffer.append(coco_keypoints)
         return coco_keypoints
     
-    def predict_stress(self) -> Optional[float]:
-        """Predict stress from video pose sequence."""
+    def predict_vad(self) -> Optional[dict]:
+        """Predict VAD scores from video pose sequence."""
         if (len(self.pose_buffer) < self.sequence_length or 
             self.stress_interpreter is None or 
             self.feature_extractor is None):
@@ -164,17 +165,50 @@ class VideoStressDetector:
             )
             self.stress_interpreter.invoke()
             
-            stress_score = self.stress_interpreter.get_tensor(
+            # Get VAD output (3 values: Valence, Arousal, Dominance)
+            vad_output = self.stress_interpreter.get_tensor(
                 self.stress_output_details[0]['index']
-            )[0][0]
+            )[0]  # Shape: (3,)
             
-            # Store stress score
+            vad_scores = {
+                'valence': float(vad_output[0]),
+                'arousal': float(vad_output[1]),
+                'dominance': float(vad_output[2])
+            }
+            
+            # Store VAD scores for smoothing
+            self.video_vad_scores.append(vad_scores)
+            
+            return vad_scores
+            
+        except Exception as e:
+            print(f"Video VAD prediction error: {e}")
+            return None
+    
+    def predict_stress(self) -> Optional[float]:
+        """Predict stress score from VAD using stress calculation formula."""
+        vad_scores = self.predict_vad()
+        if vad_scores is None:
+            return None
+        
+        try:
+            # Convert VAD to stress score using the same formula as training
+            # Stress = (1 - valence_norm) * 0.5 + arousal_norm * 0.5
+            valence_norm = vad_scores['valence'] / 10.0 if vad_scores['valence'] > 1.0 else vad_scores['valence']
+            arousal_norm = vad_scores['arousal'] / 10.0 if vad_scores['arousal'] > 1.0 else vad_scores['arousal']
+            dominance_norm = vad_scores['dominance'] / 10.0 if vad_scores['dominance'] > 1.0 else vad_scores['dominance']
+            
+            # Stress formula: low valence + high arousal + low dominance = high stress
+            stress_score = ((1 - valence_norm) * 0.4 + arousal_norm * 0.4 + (1 - dominance_norm) * 0.2)
+            stress_score = np.clip(stress_score, 0.0, 1.0)
+            
+            # Store stress score for smoothing
             self.video_stress_scores.append(float(stress_score))
             
             return float(stress_score)
             
         except Exception as e:
-            print(f"Video stress prediction error: {e}")
+            print(f"VAD to stress conversion error: {e}")
             return None
     
     def get_smoothed_stress(self) -> Optional[float]:
@@ -186,6 +220,26 @@ class VideoStressDetector:
         weights = np.exp(np.linspace(-1, 0, len(self.video_stress_scores)))
         weighted_avg = np.average(list(self.video_stress_scores), weights=weights)
         return float(weighted_avg)
+    
+    def get_smoothed_vad(self) -> Optional[dict]:
+        """Get smoothed video VAD scores."""
+        if len(self.video_vad_scores) == 0:
+            return None
+        
+        # Use exponential weighted average for each VAD component
+        weights = np.exp(np.linspace(-1, 0, len(self.video_vad_scores)))
+        
+        valence_values = [vad['valence'] for vad in self.video_vad_scores]
+        arousal_values = [vad['arousal'] for vad in self.video_vad_scores]
+        dominance_values = [vad['dominance'] for vad in self.video_vad_scores]
+        
+        smoothed_vad = {
+            'valence': float(np.average(valence_values, weights=weights)),
+            'arousal': float(np.average(arousal_values, weights=weights)),
+            'dominance': float(np.average(dominance_values, weights=weights))
+        }
+        
+        return smoothed_vad
     
     def draw_keypoints(self, frame: np.ndarray, keypoints: np.ndarray) -> np.ndarray:
         """Draw pose keypoints on frame."""
