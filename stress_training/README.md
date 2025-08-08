@@ -1,10 +1,10 @@
-# Stress Detection Training Pipeline for BOLD Dataset
+# VAD Prediction Training Pipeline for BOLD Dataset
 
-This directory contains a complete training pipeline for stress detection using the BOLD dataset and lightweight neural networks optimized for the Jetson Orin Nano.
+This directory contains a complete training pipeline for VAD (Valence, Arousal, Dominance) prediction using the BOLD dataset and lightweight neural networks optimized for the Jetson Orin Nano.
 
 ## 🎯 Overview
 
-The pipeline trains temporal models (GRU, TCN, LSTM, or Hybrid) to predict stress levels from human pose sequences. The models are designed to be lightweight and efficient for real-time deployment on edge devices.
+The pipeline trains temporal models (GRU, TCN, LSTM, or Hybrid) to predict VAD emotional dimensions from human pose sequences. The models are designed to be lightweight and efficient for real-time deployment on edge devices.
 
 ## 📁 File Structure
 
@@ -18,7 +18,7 @@ stress_training/
 ├── requirements.txt            # Python dependencies
 └── README.md                   # This file
 
-../realtime_stress_detection.py # Real-time inference script
+../realtime_stress_detection.py # Real-time inference script (VAD prediction)
 ```
 
 ## 🚀 Quick Start
@@ -46,7 +46,7 @@ This script will:
 - ✅ Test joints data loading  
 - ✅ Test pose sequence extraction
 - ✅ Test feature extraction
-- ✅ Test stress score computation
+- ✅ Test VAD score computation
 
 ### 3. Train Your First Model
 
@@ -73,15 +73,18 @@ cd ..
 python realtime_stress_detection.py
 ```
 
-## 📊 Stress Metric Definition
+## 📊 VAD Output Definition
 
-The pipeline converts BOLD dataset annotations into a quantifiable stress score (0-1) using:
+The pipeline uses BOLD dataset annotations to predict three emotional dimensions:
 
-**Stress Score = 0.7 × VAD_Stress + 0.3 × Categorical_Stress**
+**Model Outputs: [Valence, Arousal, Dominance]**
 
 Where:
-- **VAD_Stress**: Derived from Valence, Arousal, Dominance values
-- **Categorical_Stress**: Based on stress-related emotions (Fear, Anger, Disquietment, etc.)
+- **Valence**: Emotional positivity/negativity (0-10 scale)
+- **Arousal**: Emotional activation/energy level (0-10 scale)
+- **Dominance**: Sense of control/power (0-10 scale)
+
+These are the direct VAD annotations from the BOLD dataset, providing richer emotional information than a single stress score.
 
 ## 🧠 Model Architectures
 
@@ -163,10 +166,10 @@ python train.py \
 
 ## 📈 Expected Performance
 
-### Training Metrics
-- **Training Loss**: ~0.015-0.025 (MSE)
-- **Validation Loss**: ~0.020-0.035 (MSE)
-- **MAE**: ~0.08-0.12
+### Training Metrics (per VAD dimension)
+- **Training Loss**: ~0.15-0.25 (MSE)
+- **Validation Loss**: ~0.20-0.35 (MSE)
+- **MAE**: ~0.8-1.2 (on 0-10 scale)
 - **R²**: 0.65-0.85
 
 ### Inference Speed (Jetson Orin Nano)
@@ -198,11 +201,12 @@ python train.py --sequence_length 20
 - Increase training epochs: `--epochs 100`
 - Try different model: `--model_type tcn`
 - Check data quality with test script
+- Note: VAD prediction is inherently more challenging than binary classification
 
 **4. "Slow inference speed"**
 ```bash
 # Convert to TensorFlow Lite (done automatically)
-# Use TFLite model for faster inference
+# Use TFLite model for faster inference (outputs 3 VAD values)
 python evaluate.py model.tflite
 ```
 
@@ -214,7 +218,7 @@ Models are automatically converted to TensorFlow Lite format during training for
 ```python
 # Manual conversion example
 from models import ModelUtils
-ModelUtils.convert_to_tflite(model, "stress_model.tflite", quantize=True)
+ModelUtils.convert_to_tflite(model, "vad_model.tflite", quantize=True)
 ```
 
 ### Jetson Orin Nano Optimization
@@ -251,17 +255,23 @@ Each CSV row contains:
 
 ## 🔬 Advanced Usage
 
-### Custom Stress Metrics
-Modify the `compute_stress_score()` function in `data_loader.py`:
+### Custom VAD Processing
+The model now outputs VAD values directly. To derive stress or other metrics, process the VAD output:
 
 ```python
-def compute_stress_score(self, annotations: Dict) -> float:
-    # Your custom stress computation
-    valence = annotations['valence'] 
-    arousal = annotations['arousal']
+def compute_stress_from_vad(vad_prediction):
+    valence, arousal, dominance = vad_prediction
     
-    # Example: Focus only on arousal
-    stress_score = arousal
+    # Example: Convert VAD to stress score
+    # Normalize to 0-1 scale
+    valence_norm = valence / 10.0
+    arousal_norm = arousal / 10.0
+    dominance_norm = dominance / 10.0
+    
+    # Stress formula: low valence + high arousal + low dominance
+    stress_score = ((1 - valence_norm) * 0.4 + 
+                   arousal_norm * 0.4 + 
+                   (1 - dominance_norm) * 0.2)
     return np.clip(stress_score, 0.0, 1.0)
 ```
 
