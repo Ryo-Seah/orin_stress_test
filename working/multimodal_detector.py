@@ -44,7 +44,26 @@ class MultiModalDetector:
         )
         
         # Initialize audio detector with device 1
-        self.audio_detector = AudioVADDetector(audio_model_path, device_id=0)
+        import sounddevice as sd
+        devices = sd.query_devices()
+        print("🎤 Available audio devices:")
+        for idx, device in enumerate(devices):
+            input_ch = device['max_input_channels'] 
+            output_ch = device['max_output_channels']
+            print(f"  [{idx}] {device['name']} - Input: {input_ch}, Output: {output_ch}")
+
+        # Then choose a device with input_channels > 0
+        audio_device_id = None
+        for idx, device in enumerate(devices):
+            if device['max_input_channels'] > 0:
+                print(f"🎤 Found audio input device: [{idx}] {device['name']}")
+                audio_device_id = idx
+                break
+        if audio_device_id is None:
+            print("⚠️  No audio input devices found, using default")
+            audio_device_id = None # Use default
+
+        self.audio_detector = AudioVADDetector(audio_model_path, device_id=audio_device_id)
         self.audio_processor = AudioVADProcessor(self.audio_detector)
         
         self.confidence_threshold = confidence_threshold
